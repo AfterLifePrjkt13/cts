@@ -92,7 +92,7 @@ class UpdateMediaTapToTransferReceiverDisplayTest {
     }
 
     @Test
-    @Ignore("b/236749332")
+    @Ignore("b/252781795")
     fun closeToSender_displaysChip() {
         statusBarManager.updateMediaTapToTransferReceiverDisplay(
             StatusBarManager.MEDIA_TRANSFER_RECEIVER_STATE_CLOSE_TO_SENDER,
@@ -108,7 +108,7 @@ class UpdateMediaTapToTransferReceiverDisplayTest {
     }
 
     @Test
-    @Ignore("236749332")
+    @Ignore("b/252781795")
     fun farFromSender_hidesChip() {
         // First, make sure we display the chip
         statusBarManager.updateMediaTapToTransferReceiverDisplay(

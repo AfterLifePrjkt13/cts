@@ -15,63 +15,99 @@
  */
 package android.app.cts;
 
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
+
+import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+
+import android.app.ActivityOptions;
 import android.app.UiAutomation;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.test.ActivityInstrumentationTestCase2;
 
+import androidx.test.ext.junit.rules.ActivityScenarioRule;
 import androidx.test.filters.SmallTest;
 
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExternalResource;
+import org.junit.rules.RuleChain;
+import org.junit.rules.TestRule;
+
 import java.util.concurrent.Future;
+import java.util.function.Function;
 
 /**
  * Tests the {@link android.view.ContextThemeWrapper#applyOverrideConfiguration(Configuration)}
  * method and how it affects the Activity's resources and lifecycle callbacks.
  */
-public class ApplyOverrideConfigurationTest extends
-        ActivityInstrumentationTestCase2<ApplyOverrideConfigurationActivity> {
-    public ApplyOverrideConfigurationTest() {
-        super(ApplyOverrideConfigurationActivity.class);
+public class ApplyOverrideConfigurationTest {
+    private static ActivityScenarioRule<ApplyOverrideConfigurationActivity>
+            getActivityScenarioRule() {
+        final ActivityOptions options = ActivityOptions.makeBasic();
+        options.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+
+        final Intent intent = new Intent(
+                getInstrumentation().getTargetContext(), ApplyOverrideConfigurationActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        return new ActivityScenarioRule<>(intent, options.toBundle());
     }
 
-    @Override
-    public void setUp() throws Exception {
-        super.setUp();
-        getInstrumentation().getUiAutomation().setRotation(UiAutomation.ROTATION_FREEZE_0);
-    }
+    private final ActivityScenarioRule<ApplyOverrideConfigurationActivity> mActivityScenarioRule =
+            getActivityScenarioRule();
 
-    @Override
-    public void tearDown() throws Exception {
-        getInstrumentation().getUiAutomation().setRotation(UiAutomation.ROTATION_UNFREEZE);
-        super.tearDown();
+    @Rule
+    public TestRule mRule = RuleChain.outerRule(new ExternalResource() {
+        @Override
+        protected void before() {
+            getInstrumentation().getUiAutomation().setRotation(UiAutomation.ROTATION_FREEZE_0);
+        }
+
+        @Override
+        protected void after() {
+            getInstrumentation().getUiAutomation().setRotation(UiAutomation.ROTATION_UNFREEZE);
+        }
+    }).around(mActivityScenarioRule);
+
+    private <R> R onActivity(Function<ApplyOverrideConfigurationActivity, R> func) {
+        Object[] result = new Object[1];
+        mActivityScenarioRule.getScenario().onActivity(activity -> {
+            result[0] = func.apply(activity);
+        });
+        return (R) result[0];
     }
 
     @SmallTest
+    @Test
     public void testOverriddenConfigurationIsPassedIntoCallback() throws Exception {
         // This test instruments display rotation; disable it on devices that do not
         // support auto-rotation.
-        if (!isRotationSupported(getActivity())) {
+
+        if (!onActivity(ApplyOverrideConfigurationTest::isRotationSupported)) {
             return;
         }
-        final Configuration config = getActivity().getResources().getConfiguration();
-        final int originalOrientation = config.orientation;
+
+        final Configuration originalConfig =
+                onActivity(activity -> activity.getResources().getConfiguration());
         assertEquals(ApplyOverrideConfigurationActivity.OVERRIDE_SMALLEST_WIDTH,
-                config.smallestScreenWidthDp);
+                originalConfig.smallestScreenWidthDp);
 
-        Future<Configuration> callback =
-                getActivity().watchForSingleOnConfigurationChangedCallback();
-
+        final Future<Configuration> callbackConfigurationFuture = onActivity(
+                ApplyOverrideConfigurationActivity::watchForSingleOnConfigurationChangedCallback);
         getInstrumentation().getUiAutomation().setRotation(UiAutomation.ROTATION_FREEZE_90);
-
-        final Configuration callbackConfig = callback.get();
+        final Configuration callbackConfig = callbackConfigurationFuture.get();
         assertNotNull(callbackConfig);
 
-        final Configuration newConfig = getActivity().getResources().getConfiguration();
-        assertTrue(newConfig.orientation != originalOrientation);
+        final Configuration newConfig = onActivity(
+                activity -> activity.getResources().getConfiguration());
+        assertNotEquals(originalConfig.orientation, newConfig.orientation);
         assertEquals(ApplyOverrideConfigurationActivity.OVERRIDE_SMALLEST_WIDTH,
                 newConfig.smallestScreenWidthDp);
-
         assertEquals(newConfig, callbackConfig);
     }
 

@@ -19,6 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeFalse;
 
 import android.app.ActivityManager;
 import android.app.Instrumentation;
@@ -207,6 +208,10 @@ public class CtsSharesheetDeviceTest {
      */
     @Test
     public void bulkTest1() {
+        // Skip the test for automotive platform
+        assumeFalse("Skip test: does not apply to automotive",
+            mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE));
+
         if (!mMeetsResolutionRequirements) return; // Skip test if resolution is too low
         try {
             launchSharesheet(createShareIntent(false /* do not test preview */,
@@ -232,6 +237,9 @@ public class CtsSharesheetDeviceTest {
 
     @Test
     public void bulkTest2() {
+        // Skip the test for automotive platform
+        assumeFalse("Skip test: does not apply to automotive",
+            mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE));
         if (!mMeetsResolutionRequirements) return; // Skip test if resolution is too low
         try {
             addShortcuts(1);

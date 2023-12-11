@@ -29,6 +29,7 @@ import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -70,6 +71,7 @@ public class WindowInsetsAnimationTests extends WindowInsetsAnimationTestBase {
                 WINDOWING_MODE_FULLSCREEN);
         mRootView = mActivity.getWindow().getDecorView();
         assumeTrue(hasWindowInsets(mRootView, systemBars()));
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars());
     }
 
     @Test
@@ -256,7 +258,8 @@ public class WindowInsetsAnimationTests extends WindowInsetsAnimationTestBase {
 
         waitForOrFail("Waiting until animation done", () -> mActivity.mCallback.animationDone);
 
-        assertFalse(getWmState().isWindowVisible("StatusBar"));
+        mWmState.computeState();
+        assertFalse(mWmState.isWindowVisible("StatusBar"));
         verify(mActivity.mCallback).onPrepare(any());
         verify(mActivity.mCallback).onStart(any(), any());
         verify(mActivity.mCallback, atLeastOnce()).onProgress(any(), any());

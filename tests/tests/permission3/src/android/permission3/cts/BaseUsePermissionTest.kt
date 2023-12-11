@@ -26,6 +26,7 @@ import android.os.Build
 import android.provider.Settings
 import android.support.test.uiautomator.By
 import android.support.test.uiautomator.BySelector
+import android.support.test.uiautomator.UiObjectNotFoundException
 import android.support.test.uiautomator.UiScrollable
 import android.support.test.uiautomator.UiSelector
 import android.text.Spanned
@@ -97,6 +98,7 @@ abstract class BaseUsePermissionTest : BasePermissionTest() {
 
         const val NOTIF_TEXT = "permgrouprequest_notifications"
         const val ALLOW_BUTTON_TEXT = "grant_dialog_button_allow"
+        const val ALLOW_ALL_FILES_BUTTON_TEXT = "app_permission_button_allow_all_files"
         const val ALLOW_FOREGROUND_BUTTON_TEXT = "grant_dialog_button_allow_foreground"
         const val ALLOW_FOREGROUND_PREFERENCE_TEXT = "permission_access_only_foreground"
         const val ASK_BUTTON_TEXT = "app_permission_button_ask"
@@ -419,6 +421,9 @@ abstract class BaseUsePermissionTest : BasePermissionTest() {
                         "com.android.permissioncontroller:id/detail_message"
                 )[0]
             }
+            if (!node.isVisibleToUser) {
+                scrollToBottom()
+            }
             assertTrue(node.isVisibleToUser)
             val text = node.text as Spanned
             val clickableSpan = text.getSpans(0, text.length, ClickableSpan::class.java)[0]
@@ -559,7 +564,7 @@ abstract class BaseUsePermissionTest : BasePermissionTest() {
                                 By.text(getPermissionControllerString(
                                         ALLOW_FOREGROUND_PREFERENCE_TEXT))
                             } else {
-                                By.text(getPermissionControllerString(ALLOW_BUTTON_TEXT))
+                                byAnyText(getPermissionControllerResString(ALLOW_BUTTON_TEXT),getPermissionControllerResString(ALLOW_ALL_FILES_BUTTON_TEXT))
                             }
                         PermissionState.DENIED ->
                             if (!isLegacyApp && hasAskButton(permission)) {
@@ -595,15 +600,20 @@ abstract class BaseUsePermissionTest : BasePermissionTest() {
                 button.click()
             }
 
-            val shouldShowStorageWarning = !isWatch &&
-                SdkLevel.isAtLeastT() && targetSdk <= Build.VERSION_CODES.S_V2 &&
+            val shouldShowStorageWarning = SdkLevel.isAtLeastT() &&
+                targetSdk <= Build.VERSION_CODES.S_V2 &&
                 permission in MEDIA_PERMISSIONS
             if (shouldShowStorageWarning) {
                 click(By.res(ALERT_DIALOG_OK_BUTTON))
             } else if (!alreadyChecked && isLegacyApp && wasGranted) {
                 if (!isTv) {
                     // Wait for alert dialog to popup, then scroll to the bottom of it
-                    waitFindObject(By.res(ALERT_DIALOG_MESSAGE))
+                    if (isWatch) {
+                        waitFindObject(By.text(
+                                getPermissionControllerString("old_sdk_deny_warning")))
+                    } else {
+                        waitFindObject(By.res(ALERT_DIALOG_MESSAGE))
+                    }
                     scrollToBottom()
                 }
 
@@ -671,7 +681,13 @@ abstract class BaseUsePermissionTest : BasePermissionTest() {
         }
         waitForIdle()
         if (scrollable.exists()) {
-            scrollable.flingToEnd(10)
+            try {
+                scrollable.flingToEnd(10)
+            } catch (e: UiObjectNotFoundException) {
+                // flingToEnd() sometimes still fails despite waitForIdle() and the exists() check
+                // (b/246984354).
+                e.printStackTrace()
+            }
         }
     }
 

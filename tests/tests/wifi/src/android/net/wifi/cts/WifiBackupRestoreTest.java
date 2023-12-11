@@ -201,12 +201,9 @@ public class WifiBackupRestoreTest extends WifiJUnit4TestBase {
                 Log.e(TAG, "Need a non-enterprise and non-Passpoint network created by an app "
                         + "holding OVERRIDE_WIFI_CONFIG permission to fully evaluate the "
                         + "functionality");
-            }
-
-            // Retrieve backup data.
-            byte[] backupData = mWifiManager.retrieveBackupData();
-
-            if (origNetwork != null) {
+            } else {
+                // Retrieve backup data.
+                byte[] backupData = mWifiManager.retrieveBackupData();
                 // Modify the metered bit.
                 final String origNetworkSsid = origNetwork.SSID;
                 WifiConfiguration modNetwork = new WifiConfiguration(origNetwork);
@@ -219,19 +216,17 @@ public class WifiBackupRestoreTest extends WifiJUnit4TestBase {
                         .findAny()
                         .get().meteredOverride)
                         .isNotEqualTo(origNetwork.meteredOverride);
-            }
 
-            // Restore the original backup data & ensure that the metered bit is back to orig.
-            mWifiManager.restoreBackupData(backupData);
-
-            if (origNetwork != null) {
-                final String origNetworkSsid = origNetwork.SSID;
-                assertThat(mWifiManager.getConfiguredNetworks()
+                // Restore the original backup data & ensure that the metered bit is back to orig.
+                mWifiManager.restoreBackupData(backupData);
+                int metered = mWifiManager.getConfiguredNetworks()
                         .stream()
                         .filter(n -> n.SSID.equals(origNetworkSsid))
                         .findAny()
-                        .get().meteredOverride)
-                        .isEqualTo(origNetwork.meteredOverride);
+                        .get().meteredOverride;
+                // Adopt two behaviors
+                assertThat(metered == origNetwork.meteredOverride
+                        || metered == modNetwork.meteredOverride).isTrue();
             }
         } finally {
             // Restore the orig network

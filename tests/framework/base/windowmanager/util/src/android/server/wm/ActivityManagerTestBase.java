@@ -23,6 +23,7 @@ import static android.app.WindowConfiguration.ACTIVITY_TYPE_ASSISTANT;
 import static android.app.WindowConfiguration.ACTIVITY_TYPE_RECENTS;
 import static android.app.WindowConfiguration.ACTIVITY_TYPE_STANDARD;
 import static android.app.WindowConfiguration.ACTIVITY_TYPE_UNDEFINED;
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.app.WindowConfiguration.WINDOWING_MODE_UNDEFINED;
 import static android.content.Intent.ACTION_MAIN;
 import static android.content.Intent.CATEGORY_HOME;
@@ -90,6 +91,7 @@ import static android.server.wm.app.Components.BroadcastReceiverActivity.EXTRA_M
 import static android.server.wm.app.Components.LAUNCHING_ACTIVITY;
 import static android.server.wm.app.Components.LaunchingActivity.KEY_FINISH_BEFORE_LAUNCH;
 import static android.server.wm.app.Components.PipActivity.ACTION_CHANGE_ASPECT_RATIO;
+import static android.server.wm.app.Components.PipActivity.ACTION_ENTER_PIP;
 import static android.server.wm.app.Components.PipActivity.ACTION_EXPAND_PIP;
 import static android.server.wm.app.Components.PipActivity.ACTION_SET_REQUESTED_ORIENTATION;
 import static android.server.wm.app.Components.PipActivity.ACTION_UPDATE_PIP_STATE;
@@ -190,6 +192,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -333,9 +337,9 @@ public abstract class ActivityManagerTestBase {
         return "am start --activity-task-on-home -n " + getActivityName(activityName);
     }
 
-    protected static String getAmStartCmdWithDismissKeyguardIfInsecure(
+    protected static String getAmStartCmdWithDismissKeyguard(
             final ComponentName activityName) {
-        return "am start --dismiss-keyguard-if-insecure -n " + getActivityName(activityName);
+        return "am start --dismiss-keyguard -n " + getActivityName(activityName);
     }
 
     protected static String getAmStartCmdWithNoUserAction(final ComponentName activityName,
@@ -346,6 +350,11 @@ public abstract class ActivityManagerTestBase {
                         .append(" -f 0x")
                         .append(toHexString(FLAG_ACTIVITY_NO_USER_ACTION)),
                 extras);
+    }
+
+    protected static String getAmStartCmdWithWindowingMode(
+            final ComponentName activityName, int windowingMode) {
+        return getAmStartCmdInNewTask(activityName) + " --windowingMode " + windowingMode;
     }
 
     protected WindowManagerStateHelper mWmState = new WindowManagerStateHelper();
@@ -425,6 +434,19 @@ public abstract class ActivityManagerTestBase {
         void dismissKeyguardByMethod() {
             mContext.sendBroadcast(createIntentWithAction(ACTION_TRIGGER_BROADCAST)
                     .putExtra(EXTRA_DISMISS_KEYGUARD_METHOD, true));
+        }
+
+        void enterPipAndWait() {
+            try {
+                final CompletableFuture<Boolean> future = new CompletableFuture<>();
+                final RemoteCallback remoteCallback = new RemoteCallback(
+                        (Bundle result) -> future.complete(true));
+                mContext.sendBroadcast(createIntentWithAction(ACTION_ENTER_PIP)
+                        .putExtra(EXTRA_SET_PIP_CALLBACK, remoteCallback));
+                assertTrue(future.get(5000, TimeUnit.MILLISECONDS));
+            } catch (Exception e) {
+                logE("enterPipAndWait failed", e);
+            }
         }
 
         void expandPip() {
@@ -622,6 +644,8 @@ public abstract class ActivityManagerTestBase {
             pressUnlockButton();
         }
         launchHomeActivityNoWait();
+        // TODO(b/242933292): Consider removing all the tasks belonging to android.server.wm
+        // instead of removing all and then waiting for allActivitiesResumed.
         removeRootTasksWithActivityTypes(ALL_ACTIVITY_TYPE_BUT_HOME);
 
         runWithShellPermission(() -> {
@@ -631,6 +655,14 @@ public abstract class ActivityManagerTestBase {
             // state.
             mAtm.clearLaunchParamsForPackages(TEST_PACKAGES);
         });
+
+        // removeRootTaskWithActivityTypes() removes all the tasks apart from home. In a few cases,
+        // the systemUI might have a few tasks that need to be displayed all the time.
+        // For such tasks, systemUI might have a restart-logic that restarts those tasks. Those
+        // restarts can interfere with the test state. To avoid that, its better to wait for all
+        // the activities to come in the resumed state.
+        mWmState.waitForWithAmState(WindowManagerState::allActivitiesResumed, "Root Tasks should "
+                + "be either empty or resumed");
     }
 
     /** It always executes after {@link org.junit.After}. */
@@ -818,14 +850,20 @@ public abstract class ActivityManagerTestBase {
         mWmState.waitForValidState(activityName);
     }
 
-    protected void launchActivityWithDismissKeyguardIfInsecure(final ComponentName activityName) {
-        executeShellCommand(getAmStartCmdWithDismissKeyguardIfInsecure(activityName));
+    protected void launchActivityWithDismissKeyguard(final ComponentName activityName) {
+        executeShellCommand(getAmStartCmdWithDismissKeyguard(activityName));
         mWmState.waitForValidState(activityName);
     }
 
     protected void launchActivityWithNoUserAction(final ComponentName activityName,
             final CliIntentExtra... extras) {
         executeShellCommand(getAmStartCmdWithNoUserAction(activityName, extras));
+        mWmState.waitForValidState(activityName);
+    }
+
+    protected void launchActivityInFullscreen(final ComponentName activityName) {
+        executeShellCommand(
+                getAmStartCmdWithWindowingMode(activityName, WINDOWING_MODE_FULLSCREEN));
         mWmState.waitForValidState(activityName);
     }
 
@@ -1104,10 +1142,6 @@ public abstract class ActivityManagerTestBase {
                     .getConfiguration().smallestScreenWidthDp >= 600;
         }
         return sIsTablet;
-    }
-
-    protected boolean isOperatorTierDevice() {
-        return hasDeviceFeature("com.google.android.tv.operator_tier");
     }
 
     protected void waitAndAssertActivityState(ComponentName activityName,
@@ -1991,6 +2025,7 @@ public abstract class ActivityManagerTestBase {
         static final int EQUALS = 1;
         static final int GREATER_THAN = 2;
         static final int LESS_THAN = 3;
+        static final int GREATER_THAN_OR_EQUALS = 4;
 
         final T mEvent;
         final int mRule;
@@ -2014,6 +2049,9 @@ public abstract class ActivityManagerTestBase {
                     case LESS_THAN:
                         mMessage = event + " must be less than " + count;
                         break;
+                    case GREATER_THAN_OR_EQUALS:
+                        mMessage = event + " must be greater than (or equals to) " + count;
+                        break;
                     default:
                         mMessage = "Don't care";
                 }
@@ -2031,6 +2069,8 @@ public abstract class ActivityManagerTestBase {
                     return value > mCount;
                 case LESS_THAN:
                     return value < mCount;
+                case GREATER_THAN_OR_EQUALS:
+                    return value >= mCount;
                 default:
             }
             throw new RuntimeException("Unknown CountSpec rule");

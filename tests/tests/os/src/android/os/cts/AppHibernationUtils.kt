@@ -40,6 +40,7 @@ import android.support.test.uiautomator.Until
 import android.util.Log
 import androidx.test.InstrumentationRegistry
 import com.android.compatibility.common.util.ExceptionUtils.wrappingExceptions
+import com.android.compatibility.common.util.FeatureUtil
 import com.android.compatibility.common.util.LogcatInspector
 import com.android.compatibility.common.util.SystemUtil.eventually
 import com.android.compatibility.common.util.SystemUtil.runShellCommandOrThrow
@@ -61,8 +62,14 @@ import java.util.concurrent.TimeUnit
 
 private const val BROADCAST_TIMEOUT_MS = 60000L
 
+const val HIBERNATION_BOOT_RECEIVER_CLASS_NAME =
+    "com.android.permissioncontroller.hibernation.HibernationOnBootReceiver"
+const val ACTION_SET_UP_HIBERNATION =
+    "com.android.permissioncontroller.action.SET_UP_HIBERNATION"
+
 const val SYSUI_PKG_NAME = "com.android.systemui"
 const val NOTIF_LIST_ID = "com.android.systemui:id/notification_stack_scroller"
+const val NOTIF_LIST_ID_AUTOMOTIVE = "com.android.systemui:id/notifications"
 const val CLEAR_ALL_BUTTON_ID = "dismiss_text"
 // Time to find a notification. Unlikely, but in cases with a lot of notifications, it may take
 // time to find the notification we're looking for
@@ -82,35 +89,37 @@ const val APK_PACKAGE_NAME_Q_APP = "android.os.cts.autorevokeqapp"
 fun runBootCompleteReceiver(context: Context, testTag: String) {
     val pkgManager = context.packageManager
     val permissionControllerPkg = pkgManager.permissionControllerPackageName
+    var permissionControllerSetupIntent = Intent(ACTION_SET_UP_HIBERNATION).apply {
+        setPackage(permissionControllerPkg)
+        setFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+    }
     val receivers = pkgManager.queryBroadcastReceivers(
-        Intent(Intent.ACTION_BOOT_COMPLETED), /* flags= */ 0)
-    for (ri in receivers) {
-        val pkg = ri.activityInfo.packageName
-        if (pkg == permissionControllerPkg) {
-            val permissionControllerSetupIntent = Intent()
-                .setClassName(pkg, ri.activityInfo.name)
-                .setFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                .setPackage(permissionControllerPkg)
-            val countdownLatch = CountDownLatch(1)
-            Log.d(testTag, "Sending boot complete broadcast directly to ${ri.activityInfo.name} " +
-                "in package $permissionControllerPkg")
-            context.sendOrderedBroadcast(
-                permissionControllerSetupIntent,
-                /* receiverPermission= */ null,
-                object : BroadcastReceiver() {
-                    override fun onReceive(context: Context?, intent: Intent?) {
-                        countdownLatch.countDown()
-                        Log.d(testTag, "Broadcast received by $permissionControllerPkg")
-                    }
-                },
-                Handler.createAsync(Looper.getMainLooper()),
-                Activity.RESULT_OK,
-                /* initialData= */ null,
-                /* initialExtras= */ null)
-            assertTrue("Timed out while waiting for boot receiver broadcast to be received",
-                countdownLatch.await(BROADCAST_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+        permissionControllerSetupIntent, /* flags= */ 0)
+    if (receivers.size == 0) {
+        // May be on an older, pre-built PermissionController. In this case, try sending directly.
+        permissionControllerSetupIntent = Intent().apply {
+            setPackage(permissionControllerPkg)
+            setClassName(permissionControllerPkg, HIBERNATION_BOOT_RECEIVER_CLASS_NAME)
+            setFlags(Intent.FLAG_RECEIVER_FOREGROUND)
         }
     }
+    val countdownLatch = CountDownLatch(1)
+    Log.d(testTag, "Sending boot complete broadcast directly to $permissionControllerPkg")
+    context.sendOrderedBroadcast(
+        permissionControllerSetupIntent,
+        /* receiverPermission= */ null,
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                countdownLatch.countDown()
+                Log.d(testTag, "Broadcast received by $permissionControllerPkg")
+            }
+        },
+        Handler.createAsync(Looper.getMainLooper()),
+        Activity.RESULT_OK,
+        /* initialData= */ null,
+        /* initialExtras= */ null)
+    assertTrue("Timed out while waiting for boot receiver broadcast to be received",
+        countdownLatch.await(BROADCAST_TIMEOUT_MS, TimeUnit.MILLISECONDS))
 }
 
 fun runAppHibernationJob(context: Context, tag: String) {
@@ -271,7 +280,12 @@ private fun waitFindNotification(selector: BySelector, timeoutMs: Long):
     while (view == null && start + timeoutMs > System.currentTimeMillis()) {
         view = uiDevice.wait(Until.findObject(selector), VIEW_WAIT_TIMEOUT)
         if (view == null) {
-            val notificationList = UiScrollable(UiSelector().resourceId(NOTIF_LIST_ID))
+            val notificationListId = if (FeatureUtil.isAutomotive()) {
+                NOTIF_LIST_ID_AUTOMOTIVE
+            } else {
+                NOTIF_LIST_ID
+            }
+            val notificationList = UiScrollable(UiSelector().resourceId(notificationListId))
             wrappingExceptions({ cause: Throwable? -> UiDumpUtils.wrapWithUiDump(cause) }) {
                 Assert.assertTrue("Notification list view not found",
                     notificationList.waitForExists(VIEW_WAIT_TIMEOUT))
@@ -305,14 +319,18 @@ fun waitFindObject(uiAutomation: UiAutomation, selector: BySelector): UiObject2 
         val title = ui.depthFirstSearch { node ->
             node.viewIdResourceName?.contains("alertTitle") == true
         }
-        val okButton = ui.depthFirstSearch { node ->
-            node.textAsString?.equals("OK", ignoreCase = true) ?: false
+        val okCloseButton = ui.depthFirstSearch { node ->
+            (node.textAsString?.equals("OK", ignoreCase = true) ?: false)  ||
+                (node.textAsString?.equals("Close app", ignoreCase = true) ?: false)
         }
-
-        if (title?.text?.toString() == "Android System" && okButton != null) {
+        val titleString = title?.text?.toString()
+        if (okCloseButton != null &&
+            titleString != null &&
+            (titleString == "Android System" ||
+                titleString.endsWith("keeps stopping"))) {
             // Auto dismiss occasional system dialogs to prevent interfering with the test
             android.util.Log.w(AutoRevokeTest.LOG_TAG, "Ignoring exception", e)
-            okButton.click()
+            okCloseButton.click()
             return UiAutomatorUtils.waitFindObject(selector)
         } else {
             throw e

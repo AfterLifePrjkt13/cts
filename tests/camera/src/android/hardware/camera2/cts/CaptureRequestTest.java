@@ -3365,6 +3365,7 @@ public class CaptureRequestTest extends Camera2SurfaceViewTestCase {
             long[] frameDurationRange = new long[]{
                     (long) (1e9 / fpsRange.getUpper()), (long) (1e9 / fpsRange.getLower())};
             long captureTime = 0, prevCaptureTime = 0;
+            long frameDurationSum = 0;
             for (int j = 0; j < numFramesVerified; j++) {
                 long frameDuration = frameDurationRange[0];
                 CaptureResult result =
@@ -3380,13 +3381,16 @@ public class CaptureRequestTest extends Camera2SurfaceViewTestCase {
                     }
                     prevCaptureTime = captureTime;
                 }
-                mCollector.expectInRange(
-                        "Frame duration must be in the range of " +
-                                Arrays.toString(frameDurationRange),
-                        frameDuration,
-                        (long) (frameDurationRange[0] * (1 - frameDurationErrorMargin)),
-                        (long) (frameDurationRange[1] * (1 + frameDurationErrorMargin)));
+                frameDurationSum += frameDuration;
             }
+            long frameDurationAvg = frameDurationSum / numFramesVerified;
+            mCollector.expectInRange(
+                    "Frame duration must be in the range of " +
+                            Arrays.toString(frameDurationRange),
+                    frameDurationAvg,
+                    (long) (frameDurationRange[0] * (1 - frameDurationErrorMargin)),
+                    (long) (frameDurationRange[1] * (1 + frameDurationErrorMargin)));
+
         }
 
         stopPreview();

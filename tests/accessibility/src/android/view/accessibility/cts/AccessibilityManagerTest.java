@@ -34,6 +34,7 @@ import android.app.UiAutomation;
 import android.content.Context;
 import android.content.pm.ServiceInfo;
 import android.os.Handler;
+import android.platform.test.annotations.AsbSecurityTest;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.AccessibilityManager.AccessibilityServicesStateChangeListener;
@@ -43,6 +44,8 @@ import android.view.accessibility.AccessibilityManager.TouchExplorationStateChan
 
 import androidx.test.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
+
+import com.android.sts.common.util.StsExtraBusinessLogicTestCase;
 
 import com.android.compatibility.common.util.PollingCheck;
 import com.android.compatibility.common.util.SettingsStateChangerRule;
@@ -63,7 +66,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Class for testing {@link AccessibilityManager}.
  */
 @RunWith(AndroidJUnit4.class)
-public class AccessibilityManagerTest {
+public class AccessibilityManagerTest extends StsExtraBusinessLogicTestCase {
 
     private AccessibilityDumpOnFailureRule mDumpOnFailureRule =
             new AccessibilityDumpOnFailureRule();
@@ -81,6 +84,11 @@ public class AccessibilityManagerTest {
             new InstrumentedAccessibilityServiceTestRule<>(
                     SpeakingAndVibratingAccessibilityService.class, false);
 
+    private InstrumentedAccessibilityServiceTestRule<NoFeedbackAccessibilityService>
+            mNoFeedbackAccessibilityServiceRule =
+            new InstrumentedAccessibilityServiceTestRule<>(
+                    NoFeedbackAccessibilityService.class, false);
+
     private static final Instrumentation sInstrumentation =
             InstrumentationRegistry.getInstrumentation();
 
@@ -92,6 +100,9 @@ public class AccessibilityManagerTest {
 
     private static final String MULTIPLE_FEEDBACK_TYPES_ACCESSIBILITY_SERVICE_NAME =
         "android.view.accessibility.cts.SpeakingAndVibratingAccessibilityService";
+
+    private static final String NO_FEEDBACK_ACCESSIBILITY_SERVICE_NAME =
+            "android.view.accessibility.cts.NoFeedbackAccessibilityService";
 
     public static final String ACCESSIBILITY_NON_INTERACTIVE_UI_TIMEOUT_MS =
             "accessibility_non_interactive_ui_timeout_ms";
@@ -112,6 +123,7 @@ public class AccessibilityManagerTest {
             // SettingsStateChangerRule will suppress accessibility services, so it should be
             // executed before enabling a11y services and after disabling a11y services.
             .outerRule(mAudioDescriptionSetterRule)
+            .around(mNoFeedbackAccessibilityServiceRule)
             .around(mSpeakingAndVibratingAccessibilityServiceRule)
             .around(mVibratingAccessibilityServiceRule)
             .around(mSpeakingAccessibilityServiceRule)
@@ -239,6 +251,26 @@ public class AccessibilityManagerTest {
         }
         assertTrue("The speaking service should be enabled.", speakingServiceEnabled);
         assertTrue("The vibrating service should be enabled.", vibratingServiceEnabled);
+    }
+
+    @AsbSecurityTest(cveBugId = {243849844})
+    @Test
+    public void testGetEnabledAccessibilityServiceList_NoFeedback() {
+        mNoFeedbackAccessibilityServiceRule.enableService();
+        List<AccessibilityServiceInfo> enabledServices =
+                mAccessibilityManager.getEnabledAccessibilityServiceList(
+                        AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
+        boolean noFeedbackServiceEnabled = false;
+        final int serviceCount = enabledServices.size();
+        for (int i = 0; i < serviceCount; i++) {
+            AccessibilityServiceInfo enabledService = enabledServices.get(i);
+            ServiceInfo serviceInfo = enabledService.getResolveInfo().serviceInfo;
+            if (mTargetContext.getPackageName().equals(serviceInfo.packageName)
+                    && NO_FEEDBACK_ACCESSIBILITY_SERVICE_NAME.equals(serviceInfo.name)) {
+                noFeedbackServiceEnabled = true;
+            }
+        }
+        assertTrue("The no-feedback service should be enabled.", noFeedbackServiceEnabled);
     }
 
     @Test

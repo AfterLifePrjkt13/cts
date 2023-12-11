@@ -174,6 +174,7 @@ public class WindowManagerStateHelper extends WindowManagerState {
 
     public static boolean isKeyguardShowingAndNotOccluded(WindowManagerState state) {
         return state.getKeyguardControllerState().keyguardShowing
+                && state.getKeyguardServiceDelegateState().isKeyguardAwake()
                 && !state.getKeyguardControllerState().aodShowing
                 && !state.getKeyguardControllerState().isKeyguardOccluded(DEFAULT_DISPLAY);
     }
@@ -187,6 +188,13 @@ public class WindowManagerStateHelper extends WindowManagerState {
         waitForWithAmState(state -> state.getKeyguardControllerState().keyguardShowing
                         && state.getKeyguardControllerState().isKeyguardOccluded(DEFAULT_DISPLAY),
                 "Keyguard showing and occluded");
+    }
+
+    void waitAndAssertWindowShown(int windowType, boolean show) {
+        assertTrue(waitFor(state -> {
+            WindowState w = state.findFirstWindowWithType(windowType);
+            return w != null && w.isSurfaceShown() == show;
+        }, "wait for window surface " + (show ? "show" : "hide")));
     }
 
     public void waitForAodShowing() {
@@ -698,6 +706,8 @@ public class WindowManagerStateHelper extends WindowManagerState {
     public void assertKeyguardShowingAndOccluded() {
         assertTrue("Keyguard is showing",
                 getKeyguardControllerState().keyguardShowing);
+        assertFalse("keygaurd is not going away",
+                getKeyguardControllerState().mKeyguardGoingAway);
         assertTrue("Keyguard is occluded",
                 getKeyguardControllerState().isKeyguardOccluded(DEFAULT_DISPLAY));
     }
@@ -705,6 +715,8 @@ public class WindowManagerStateHelper extends WindowManagerState {
     public void assertKeyguardShowingAndNotOccluded() {
         assertTrue("Keyguard is showing",
                 getKeyguardControllerState().keyguardShowing);
+        assertFalse("keygaurd is not going away",
+                getKeyguardControllerState().mKeyguardGoingAway);
         assertFalse("Keyguard is not occluded",
                 getKeyguardControllerState().isKeyguardOccluded(DEFAULT_DISPLAY));
     }

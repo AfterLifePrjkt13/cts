@@ -19,6 +19,7 @@ package android.widget.cts;
 import static com.android.cts.mockime.ImeEventStreamTestUtils.expectEvent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -27,12 +28,14 @@ import static org.junit.Assert.assertTrue;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Point;
 import android.os.SystemClock;
 import android.support.test.uiautomator.By;
 import android.support.test.uiautomator.UiDevice;
 import android.support.test.uiautomator.UiObject2;
+import android.support.test.uiautomator.Until;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
@@ -51,6 +54,7 @@ import android.view.ViewConfiguration;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.Editor;
 import android.widget.TextView;
 import android.widget.TextView.BufferType;
 
@@ -89,6 +93,8 @@ public class EditTextTest {
     @Rule
     public ActivityTestRule<EditTextCtsActivity> mActivityRule =
             new ActivityTestRule<>(EditTextCtsActivity.class);
+    public ActivityTestRule<EditTextCursorCtsActivity> mEmptyActivityRule =
+            new ActivityTestRule<>(EditTextCursorCtsActivity.class, false, false);
 
     @Before
     public void setup() {
@@ -760,4 +766,67 @@ public class EditTextTest {
         object.click();
         SystemClock.sleep(ViewConfiguration.getDoubleTapTimeout() + 50);
     }
+
+    @Test
+    public void testCursorNotBlinkingOnNewActivity_WithoutFocus() {
+        Activity testActivity = mEmptyActivityRule.launchActivity(null);
+        EditText et = testActivity.findViewById(R.id.edittext_simple1);
+        Editor editor = et.getEditorForTesting();
+        boolean cursorBlinking = editor.isBlinking();
+        assertFalse(cursorBlinking);
+    }
+
+    @Test
+    public void testCursorBlinkingOnNewActivity_WithFocus() {
+        Activity testActivity = mEmptyActivityRule.launchActivity(null);
+        EditText et = testActivity.findViewById(R.id.edittext_simple1);
+        Editor editor = et.getEditorForTesting();
+
+        mInstrumentation.runOnMainSync(() -> {
+            et.requestFocus();
+        });
+
+        boolean cursorBlinking = editor.isBlinking();
+        assertTrue(cursorBlinking);
+    }
+
+    @Test
+    public void testSuspendAndResumeBlinkingCursor() {
+        Activity testActivity = mEmptyActivityRule.launchActivity(null);
+        final EditText et = testActivity.findViewById(R.id.edittext_simple1);
+        Editor editor = et.getEditorForTesting();
+
+        mInstrumentation.runOnMainSync(() -> {
+            et.requestFocus();
+        });
+
+        UiDevice device =  UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+
+        boolean cursorBlinking = editor.isBlinking();
+        assertTrue(cursorBlinking);
+
+        // Send activity to the background.
+        device.pressHome();
+        device.waitForIdle();
+
+        cursorBlinking = editor.isBlinking();
+        assertFalse(cursorBlinking);
+
+        // Bring the activity back into the foreground
+        Intent resumeActivity = new Intent(mInstrumentation.getContext(),
+                EditTextCursorCtsActivity.class);
+        resumeActivity.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        mActivity.startActivity(resumeActivity);
+
+        // Check if the activity is in the foreground.
+        device.wait(Until.findObject(By.text("test for blinking cursor")), 2000);
+
+        mInstrumentation.runOnMainSync(() -> {
+            et.requestFocus();
+        });
+
+        cursorBlinking = editor.isBlinking();
+        assertTrue(cursorBlinking);
+    }
+
 }

@@ -24,8 +24,8 @@ import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.content.pm.FeatureInfo;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.SystemProperties;
 import android.security.keystore.KeyGenParameterSpec;
@@ -55,6 +55,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
@@ -76,7 +77,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.security.SecureRandom;
 
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
@@ -1139,5 +1139,10 @@ public class TestUtils {
 
     public static boolean isAttestationSupported() {
         return Build.VERSION.DEVICE_INITIAL_SDK_INT >= Build.VERSION_CODES.O;
+    }
+
+    public static boolean hasSecureLockScreen(Context context) {
+        PackageManager pm = context.getPackageManager();
+        return (pm != null && pm.hasSystemFeature(PackageManager.FEATURE_SECURE_LOCK_SCREEN));
     }
 }

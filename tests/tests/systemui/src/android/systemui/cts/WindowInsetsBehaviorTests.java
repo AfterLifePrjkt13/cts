@@ -18,8 +18,8 @@ package android.systemui.cts;
 
 import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
-import static android.provider.DeviceConfig.NAMESPACE_ANDROID;
 import static android.provider.AndroidDeviceConfig.KEY_SYSTEM_GESTURE_EXCLUSION_LIMIT_DP;
+import static android.provider.DeviceConfig.NAMESPACE_ANDROID;
 import static android.view.View.SYSTEM_UI_CLEARABLE_FLAGS;
 import static android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
 import static android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
@@ -169,16 +169,13 @@ public class WindowInsetsBehaviorTests {
         mConfiguredInSettings = false;
     }
 
-    @Rule
-    public ScreenshotTestRule mScreenshotTestRule =
+    private ScreenshotTestRule mScreenshotTestRule =
             new ScreenshotTestRule(DEF_SCREENSHOT_BASE_PATH);
 
     @Rule
-    public ActivityTestRule<WindowInsetsActivity> mActivityRule = new ActivityTestRule<>(
-            WindowInsetsActivity.class, true, false);
-
-    @Rule
-    public RuleChain mRuleChain = RuleChain.outerRule(mActivityRule)
+    public RuleChain mRuleChain = RuleChain
+            .outerRule(new ActivityTestRule<>(
+                    WindowInsetsActivity.class, true, false))
             .around(mScreenshotTestRule);
 
     private WindowInsetsActivity mActivity;

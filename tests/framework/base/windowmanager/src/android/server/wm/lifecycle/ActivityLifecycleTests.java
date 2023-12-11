@@ -76,6 +76,7 @@ import static android.view.Surface.ROTATION_90;
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 import android.app.Activity;
 import android.app.ActivityOptions;
@@ -721,6 +722,16 @@ public class ActivityLifecycleTests extends ActivityLifecycleClientTestBase {
         final Activity testActivity = new Launcher(FirstActivity.class)
                 .setOptions(getLaunchOptionsForFullscreen())
                 .launch();
+
+        // FirstActivity should be in the same TDA as targetActivity in order to affect the
+        // targetActivity visibility.
+        mWmState.waitForValidState(testActivity.getComponentName());
+        final int targetActivityTDAFeatureId = mWmState.getTaskDisplayAreaFeatureId(targetActivity);
+        final int testActivityTDAFeatureId = mWmState.getTaskDisplayAreaFeatureId(
+                testActivity.getComponentName());
+        assumeTrue("Activities should be on the same TaskDisplayArea",
+                targetActivityTDAFeatureId == testActivityTDAFeatureId);
+
         final boolean isTranslucent = isTranslucent(testActivity);
         mWmState.waitForActivityState(
                 targetActivity, isTranslucent ? STATE_PAUSED : STATE_STOPPED);

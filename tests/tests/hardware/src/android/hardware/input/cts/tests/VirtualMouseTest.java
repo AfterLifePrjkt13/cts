@@ -122,11 +122,12 @@ public class VirtualMouseTest extends VirtualDeviceTestCase {
                 .setRelativeY(-relativeChangeY)
                 .setRelativeX(-relativeChangeX)
                 .build());
+
+        // b/263272128: Consume hover enter, if received, to make the test permissive against new
+        // and existing behaviors.
+        maybeConsumeHoverEnter();
+
         verifyEvents(Arrays.asList(
-                createMotionEvent(MotionEvent.ACTION_HOVER_ENTER, secondStopPositionX,
-                        secondStopPositionY, -relativeChangeX,
-                        -relativeChangeY, /* vScroll= */ 0f,
-                        /* hScroll= */ 0f, /* buttonState= */ 0, /* pressure= */ 0.0f),
                 createMotionEvent(MotionEvent.ACTION_HOVER_MOVE, secondStopPositionX,
                         secondStopPositionY, -relativeChangeX,
                         -relativeChangeY, /* vScroll= */ 0f,

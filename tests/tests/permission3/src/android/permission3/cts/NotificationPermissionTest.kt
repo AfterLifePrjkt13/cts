@@ -194,6 +194,7 @@ class NotificationPermissionTest : BaseUsePermissionTest() {
     fun notificationPromptShownForSubsequentStartsIfTaskStartWasLauncher() {
         installPackage(APP_APK_PATH_CREATE_NOTIFICATION_CHANNELS_31, expectSuccess = true)
         launchApp(startSecondActivity = true)
+        waitFindObject(By.res(ALLOW_BUTTON))
         pressBack()
         clickPermissionRequestAllowButton()
     }
@@ -226,7 +227,10 @@ class NotificationPermissionTest : BaseUsePermissionTest() {
         // perform a launcher start, then start a secondary app
         launchApp(startSecondaryAppAndCreateChannelsAfterSecondStart = true)
         try {
-            waitFindObject(By.textContains(SECOND_ACTIVITY_LABEL))
+            // Watch does not have app bar
+            if (!isWatch) {
+                waitFindObject(By.textContains(SECOND_ACTIVITY_LABEL))
+            }
             assertDialogNotShowing()
         } finally {
             uninstallPackage(OTHER_APP_PACKAGE_NAME)
@@ -367,7 +371,10 @@ class NotificationPermissionTest : BaseUsePermissionTest() {
         options.isEligibleForLegacyPermissionPrompt = isEligibleForPromptOption
         context.startActivity(intent, options.toBundle())
 
-        waitFindObject(By.textContains(ACTIVITY_LABEL))
+        // Watch does not have app bar
+        if (!isWatch) {
+            waitFindObject(By.textContains(ACTIVITY_LABEL))
+        }
         waitForIdle()
     }
 

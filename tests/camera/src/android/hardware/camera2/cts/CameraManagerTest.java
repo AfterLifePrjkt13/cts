@@ -151,9 +151,13 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
 
     @Test
     public void testCameraManagerGetDeviceIdList() throws Exception {
-
         String[] ids = mCameraIdsUnderTest;
         if (VERBOSE) Log.v(TAG, "CameraManager ids: " + Arrays.toString(ids));
+
+        if (mAdoptShellPerm) {
+            Log.v(TAG, "Camera related features may not be accurate for system cameras, skipping");
+            return;
+        }
 
         /**
          * Test: that if there is at least one reported id, then the system must have
@@ -168,6 +172,7 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
          * must be matched system features.
          */
         boolean externalCameraConnected = false;
+        String mainBackId = null, mainFrontId = null;
         Map<String, Integer> lensFacingMap = new HashMap<String, Integer>();
         for (int i = 0; i < ids.length; i++) {
             CameraCharacteristics props = mCameraManager.getCameraCharacteristics(ids[i]);
@@ -178,9 +183,15 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
             if (lensFacing == CameraCharacteristics.LENS_FACING_FRONT) {
                 assertTrue("System doesn't have front camera feature",
                         mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FRONT));
+                if (mainFrontId == null) {
+                    mainFrontId = ids[i];
+                }
             } else if (lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
                 assertTrue("System doesn't have back camera feature",
                         mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA));
+                if (mainBackId == null) {
+                    mainBackId = ids[i];
+                }
             } else if (lensFacing == CameraCharacteristics.LENS_FACING_EXTERNAL) {
                 externalCameraConnected = true;
                 assertTrue("System doesn't have external camera feature",
@@ -191,8 +202,7 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
         }
 
         // Test an external camera is connected if FEATURE_CAMERA_EXTERNAL is advertised
-        if (!mAdoptShellPerm &&
-                mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_EXTERNAL)) {
+        if (mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_EXTERNAL)) {
             assertTrue("External camera is not connected on device with FEATURE_CAMERA_EXTERNAL",
                     externalCameraConnected);
         }
@@ -210,36 +220,68 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
             || mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FRONT)
             || mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_EXTERNAL));
 
-        boolean frontBackAdvertised =
-                mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_CONCURRENT);
+        testConcurrentCameraFeature(mainFrontId, mainBackId);
+    }
 
-        boolean frontBackCombinationFound = false;
-        // Go through all combinations and see that at least one combination has a front + back
-        // camera.
+    /**
+     * Returns true if mConcurrentCameraIdCombinations has at least one combination containing both
+     * mainFrontId and mainBackId.
+     * Returns false otherwise.
+     */
+    private boolean containsMainFrontBackConcurrentCombination(String mainFrontId,
+            String mainBackId) {
+        if (mainFrontId == null || mainBackId == null) {
+            return false;
+        }
+        boolean combinationFound = false;
+
+        // Go through all combinations and see that at least one combination has a main
+        // front + main back camera.
         for (Set<String> cameraIdCombination : mConcurrentCameraIdCombinations) {
             boolean frontFacingFound = false, backFacingFound = false;
             for (String cameraId : cameraIdCombination) {
-                Integer lensFacing = lensFacingMap.get(cameraId);
-                if (lensFacing == CameraCharacteristics.LENS_FACING_FRONT) {
+                if (cameraId.equals(mainFrontId)) {
                     frontFacingFound = true;
-                } else if (lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
+                } else if (cameraId.equals(mainBackId)) {
                     backFacingFound = true;
                 }
                 if (frontFacingFound && backFacingFound) {
-                    frontBackCombinationFound = true;
+                    combinationFound = true;
                     break;
                 }
             }
-            if (frontBackCombinationFound) {
+            if (combinationFound) {
                 break;
             }
         }
+        return combinationFound;
+    }
+
+    /**
+     * Test the consistency of the statement: If FEATURE_CAMERA_CONCURRENT is advertised,
+     * CameraManager.getConcurrentCameraIds()
+     * returns a combination which contains the main front id and main back id, and vice versa.
+     */
+    private void testConcurrentCameraFeature(String mainFrontId, String mainBackId) {
+        boolean frontBackFeatureAdvertised =
+                  mPackageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_CONCURRENT);
+        if (frontBackFeatureAdvertised) {
+            assertTrue("FEATURE_CAMERA_CONCURRENT advertised but main front id is null",
+                        mainFrontId != null);
+            assertTrue("FEATURE_CAMERA_CONCURRENT advertised but main back id is null",
+                        mainBackId != null);
+        }
+
+        boolean concurrentMainFrontBackCombinationFound =
+                containsMainFrontBackConcurrentCombination(mainFrontId, mainBackId);
 
         if(mCameraIdsUnderTest.length > 0) {
-            assertTrue("System camera feature FEATURE_CAMERA_CONCURRENT = " + frontBackAdvertised +
-                    " and device actually having a front back combination which can operate " +
-                    "concurrently = " + frontBackCombinationFound +  " do not match",
-                    frontBackAdvertised == frontBackCombinationFound);
+            assertTrue("System camera feature FEATURE_CAMERA_CONCURRENT = "
+                    + frontBackFeatureAdvertised
+                    + " and device actually having a main front back combination which can operate "
+                    + "concurrently = " + concurrentMainFrontBackCombinationFound
+                    +  " do not match",
+                    frontBackFeatureAdvertised == concurrentMainFrontBackCombinationFound);
         }
     }
 
@@ -627,18 +669,23 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
     }
 
     private <T> void verifyAvailabilityCbsReceived(HashSet<T> expectedCameras,
-            LinkedBlockingQueue<T> queue, LinkedBlockingQueue<T> otherQueue,
+            LinkedBlockingQueue<T> expectedEventQueue, LinkedBlockingQueue<T> unExpectedEventQueue,
             boolean available) throws Exception {
         while (expectedCameras.size() > 0) {
-            T id = queue.poll(AVAILABILITY_TIMEOUT_MS,
+            T id = expectedEventQueue.poll(AVAILABILITY_TIMEOUT_MS,
                     java.util.concurrent.TimeUnit.MILLISECONDS);
             assertTrue("Did not receive initial " + (available ? "available" : "unavailable")
                     + " notices for some cameras", id != null);
+            assertTrue("Received initial " + (available ? "available" : "unavailable")
+                    + " notice for wrong camera " + id, expectedCameras.contains(id));
             expectedCameras.remove(id);
         }
-        // Verify no unavailable/available cameras were reported
-        assertTrue("Some camera devices are initially " + (available ? "unavailable" : "available"),
-                otherQueue.size() == 0);
+        // Verify no unexpected unavailable/available cameras were reported
+        if (unExpectedEventQueue != null) {
+            assertTrue("Received unexpected initial "
+                    + (available ? "unavailable" : "available"),
+                    unExpectedEventQueue.size() == 0);
+        }
     }
 
     private void verifySingleAvailabilityCbsReceived(LinkedBlockingQueue<String> expectedEventQueue,
@@ -739,14 +786,14 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
         verifyAvailabilityCbsReceived(expectedAvailableCameras, availableEventQueue,
                 unavailableEventQueue, true /*available*/);
 
+        // Clear physical camera callback queue in case the initial state of certain physical
+        // cameras are unavailable.
+        unavailablePhysicalCamEventQueue.clear();
+
         // Verify transitions for individual cameras
         for (String id : cameras) {
             MockStateCallback mockListener = MockStateCallback.mock();
             mCameraListener = new BlockingStateCallback(mockListener);
-
-            // Clear logical camera callback queue in case the initial state of certain physical
-            // cameras are unavailable.
-            unavailablePhysicalCamEventQueue.clear();
 
             if (useExecutor) {
                 mCameraManager.openCamera(id, executor, mCameraListener);
@@ -801,8 +848,13 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
 
             expectedLogicalCameras = new HashSet<Pair<String, String>>(relatedLogicalCameras);
             verifyAvailabilityCbsReceived(expectedLogicalCameras,
-                    availablePhysicalCamEventQueue, unavailablePhysicalCamEventQueue,
+                    availablePhysicalCamEventQueue,
+                    null /*unExpectedEventQueue*/,
                     true /*available*/);
+
+            // Clear physical camera callback queue in case the initial state of certain physical
+            // cameras are unavailable.
+            unavailablePhysicalCamEventQueue.clear();
         }
 
         // Verify that we can unregister the listener and see no more events
@@ -896,6 +948,8 @@ public class CameraManagerTest extends Camera2ParameterizedTestCase {
 
             verifySingleAvailabilityCbsReceived(onCameraClosedEventQueue,
                     onCameraOpenedEventQueue, cameras[0], "onCameraClosed", "onCameraOpened");
+
+            mCameraManager.unregisterAvailabilityCallback(ac);
         }
     } // testCameraManagerListenerCallbacks
 

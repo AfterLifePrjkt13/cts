@@ -24,7 +24,6 @@ import static org.junit.Assert.assertTrue;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.app.UiAutomation;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Rect;
@@ -68,7 +67,6 @@ public class ASurfaceControlTestActivity extends Activity {
     public static final long WAIT_TIMEOUT_S = 5;
 
     private final Handler mHandler = new Handler(Looper.getMainLooper());
-    private volatile boolean mOnWatch;
 
     private SurfaceView mSurfaceView;
     private FrameLayout.LayoutParams mLayoutParams;
@@ -90,12 +88,6 @@ public class ASurfaceControlTestActivity extends Activity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        final PackageManager packageManager = getPackageManager();
-        mOnWatch = packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH);
-        if (mOnWatch) {
-            // Don't try and set up test/capture infrastructure - they're not supported
-            return;
-        }
 
         final View decorView = getWindow().getDecorView();
         decorView.setWindowInsetsAnimationCallback(mInsetsAnimationCallback);
@@ -105,6 +97,7 @@ public class ASurfaceControlTestActivity extends Activity {
         decorView.setPointerIcon(
                 PointerIcon.getSystemIcon(this, PointerIcon.TYPE_NULL));
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().setDecorFitsSystemWindows(false);
 
         mLayoutParams = new FrameLayout.LayoutParams(DEFAULT_LAYOUT_WIDTH, DEFAULT_LAYOUT_HEIGHT,
                 Gravity.LEFT | Gravity.TOP);
@@ -157,16 +150,6 @@ public class ASurfaceControlTestActivity extends Activity {
         } catch (InterruptedException e) {
         }
 
-        if (mOnWatch) {
-            /**
-             * Watch devices not supported, since they may not support:
-             *    1) displaying unmasked windows
-             *    2) RenderScript
-             *    3) Video playback
-             */
-            return;
-        }
-
         mHandler.post(() -> {
             mSurfaceView.getHolder().addCallback(surfaceHolderCallback);
             mParent.addView(mSurfaceView, mLayoutParams);
@@ -174,6 +157,12 @@ public class ASurfaceControlTestActivity extends Activity {
     }
 
     public void verifyScreenshot(PixelChecker pixelChecker, TestName name) {
+        int retries = 0;
+        int maxRetries = 2;
+        int numMatchingPixels = 0;
+        Rect bounds = null;
+        boolean success = false;
+
         // Wait for the stable insets update. The position of the surface view is in correct before
         // the update. Sometimes this callback isn't called, so we don't want to fail the test
         // because it times out.
@@ -181,33 +170,44 @@ public class ASurfaceControlTestActivity extends Activity {
             Log.w(TAG, "Insets animation wait timed out.");
         }
 
-        final CountDownLatch countDownLatch = new CountDownLatch(1);
-        UiAutomation uiAutomation = mInstrumentation.getUiAutomation();
+        while (retries < maxRetries) {
+            final CountDownLatch countDownLatch = new CountDownLatch(1);
+            UiAutomation uiAutomation = mInstrumentation.getUiAutomation();
+            mHandler.post(() -> {
+                mScreenshot = uiAutomation.takeScreenshot(getWindow());
+                countDownLatch.countDown();
+            });
+
+            try {
+                countDownLatch.await(WAIT_TIMEOUT_S, TimeUnit.SECONDS);
+            } catch (Exception e) {
+            }
+
+            assertNotNull(mScreenshot);
+
+            Bitmap swBitmap = mScreenshot.copy(Bitmap.Config.ARGB_8888, false);
+            mScreenshot.recycle();
+
+            numMatchingPixels = pixelChecker.getNumMatchingPixels(swBitmap);
+            bounds = pixelChecker.getBoundsToCheck(swBitmap);
+            success = pixelChecker.checkPixels(numMatchingPixels, swBitmap.getWidth(),
+                    swBitmap.getHeight());
+            if (!success) {
+                saveFailureCapture(swBitmap, name);
+                swBitmap.recycle();
+                retries++;
+                try {
+                    Thread.sleep(300);
+                } catch (InterruptedException e) {
+                }
+            } else {
+                swBitmap.recycle();
+                break;
+            }
+        }
         mHandler.post(() -> {
-            mScreenshot = uiAutomation.takeScreenshot(getWindow());
             mParent.removeAllViews();
-            countDownLatch.countDown();
         });
-
-        try {
-            countDownLatch.await(WAIT_TIMEOUT_S, TimeUnit.SECONDS);
-        } catch (Exception e) {
-        }
-
-        assertNotNull(mScreenshot);
-
-        Bitmap swBitmap = mScreenshot.copy(Bitmap.Config.ARGB_8888, false);
-        mScreenshot.recycle();
-
-        int numMatchingPixels = pixelChecker.getNumMatchingPixels(swBitmap);
-        Rect bounds = pixelChecker.getBoundsToCheck(swBitmap);
-        boolean success = pixelChecker.checkPixels(numMatchingPixels, swBitmap.getWidth(),
-                swBitmap.getHeight());
-        if (!success) {
-            saveFailureCapture(swBitmap, name);
-        }
-        swBitmap.recycle();
-
         assertTrue("Actual matched pixels:" + numMatchingPixels
                 + " Bitmap size:" + bounds.width() + "x" + bounds.height(), success);
     }
@@ -393,9 +393,5 @@ public class ASurfaceControlTestActivity extends Activity {
                 throw new RuntimeException(e);
             }
         }
-    }
-
-    public boolean isOnWatch() {
-        return mOnWatch;
     }
 }

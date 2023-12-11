@@ -801,6 +801,8 @@ bool CodecEncoderTest::testAdaptiveBitRate(const char* encoder, const char* srcP
     int kAdaptiveBitrateInterval = 3;  // change bitrate every 3 seconds.
     int kAdaptiveBitrateDurationFrame = mDefFrameRate * kAdaptiveBitrateInterval;
     int kBitrateChangeRequests = 7;
+    // TODO(b/251265293) Reduce the allowed deviation after improving the test conditions
+    float kMaxBitrateDeviation = 60.0; // allowed bitrate deviation in %
     AMediaFormat* params = AMediaFormat_new();
     mFormats.push_back(params);
     // Setting in CBR Mode
@@ -854,7 +856,7 @@ bool CodecEncoderTest::testAdaptiveBitRate(const char* encoder, const char* srcP
         int outSize = mOutputBuff->getOutStreamSize() * 8;
         float brDev = abs(expOutSize - outSize) * 100.0f / expOutSize;
         ALOGD("%s relative bitrate error is %f %%", log, brDev);
-        if (brDev > 50) {
+        if (brDev > kMaxBitrateDeviation) {
             ALOGE("%s relative bitrate error is is too large %f %%", log, brDev);
             return false;
         }

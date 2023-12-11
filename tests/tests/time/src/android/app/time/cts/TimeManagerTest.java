@@ -34,11 +34,13 @@ import android.app.time.TimeZoneConfiguration;
 import android.app.time.cts.shell.DeviceConfigKeys;
 import android.app.time.cts.shell.DeviceConfigShellHelper;
 import android.app.time.cts.shell.DeviceShellCommandExecutor;
+import android.app.time.cts.shell.TimeDetectorShellHelper;
 import android.app.time.cts.shell.device.InstrumentationShellCommandExecutor;
 import android.content.Context;
 import android.location.LocationManager;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.provider.Settings;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 
@@ -67,6 +69,7 @@ public class TimeManagerTest {
 
     private DeviceConfigShellHelper mDeviceConfigShellHelper;
     private DeviceConfigShellHelper.PreTestState mDeviceConfigPreTestState;
+    private TimeDetectorShellHelper mTimeDetectorShellHelper;
 
     @Before
     public void before() throws Exception {
@@ -74,6 +77,7 @@ public class TimeManagerTest {
         DeviceShellCommandExecutor shellCommandExecutor = new InstrumentationShellCommandExecutor(
                 instrumentation.getUiAutomation());
         mDeviceConfigShellHelper = new DeviceConfigShellHelper(shellCommandExecutor);
+        mTimeDetectorShellHelper = new TimeDetectorShellHelper(shellCommandExecutor);
 
         // This anticipates a future state where a generally applied target preparer may disable
         // device_config sync for all CTS tests: only suspend syncing if it isn't already suspended,
@@ -176,55 +180,68 @@ public class TimeManagerTest {
 
     @Test
     public void externalSuggestions() throws Exception {
-        long startCurrentTimeMillis = System.currentTimeMillis();
-        long elapsedRealtimeMillis = SystemClock.elapsedRealtime();
+        boolean disableAutoDetectionAfterTest = false;
+        if (!mTimeDetectorShellHelper.isAutoDetectionEnabled()) {
+            // Turn auto time detection on for the duration of this test.
+            disableAutoDetectionAfterTest = true;
+            assertTrue(setAutoTimeDetectionEnabledAndSleep(true));
+        }
 
-        Context context = InstrumentationRegistry.getInstrumentation().getContext();
-        TimeManager timeManager = context.getSystemService(TimeManager.class);
-        assertNotNull(timeManager);
+        try {
+            long startCurrentTimeMillis = System.currentTimeMillis();
+            long elapsedRealtimeMillis = SystemClock.elapsedRealtime();
 
-        // Set the time detector to only use ORIGIN_NETWORK. The important aspect is that it isn't
-        // ORIGIN_EXTERNAL, and so suggestions from external should be ignored.
-        mDeviceConfigShellHelper.put(NAMESPACE_SYSTEM_TIME,
-                DeviceConfigKeys.TimeDetector.KEY_TIME_DETECTOR_ORIGIN_PRIORITIES_OVERRIDE,
-                DeviceConfigKeys.TimeDetector.ORIGIN_NETWORK);
-        sleepForAsyncOperation();
+            Context context = InstrumentationRegistry.getInstrumentation().getContext();
+            TimeManager timeManager = context.getSystemService(TimeManager.class);
+            assertNotNull(timeManager);
 
-        long suggestion1Millis =
-                Instant.ofEpochMilli(startCurrentTimeMillis).plus(1, ChronoUnit.DAYS).toEpochMilli();
-        ExternalTimeSuggestion futureTimeSuggestion1 =
-                new ExternalTimeSuggestion(elapsedRealtimeMillis, suggestion1Millis);
-        long suggestion2Millis =
-                Instant.ofEpochMilli(suggestion1Millis).plus(1, ChronoUnit.DAYS).toEpochMilli();
-        ExternalTimeSuggestion futureTimeSuggestion2 =
-                new ExternalTimeSuggestion(elapsedRealtimeMillis, suggestion2Millis);
+            // Set the time detector to only use ORIGIN_NETWORK. The important aspect is that it
+            // isn't ORIGIN_EXTERNAL, and so suggestions from external should be ignored.
+            mDeviceConfigShellHelper.put(NAMESPACE_SYSTEM_TIME,
+                    DeviceConfigKeys.TimeDetector.KEY_TIME_DETECTOR_ORIGIN_PRIORITIES_OVERRIDE,
+                    DeviceConfigKeys.TimeDetector.ORIGIN_NETWORK);
+            sleepForAsyncOperation();
 
-        // Suggest a change. It shouldn't be used.
-        timeManager.suggestExternalTime(futureTimeSuggestion1);
-        sleepForAsyncOperation();
+            long suggestion1Millis = Instant.ofEpochMilli(startCurrentTimeMillis)
+                    .plus(1, ChronoUnit.DAYS).toEpochMilli();
+            ExternalTimeSuggestion futureTimeSuggestion1 =
+                    new ExternalTimeSuggestion(elapsedRealtimeMillis, suggestion1Millis);
+            long suggestion2Millis =
+                    Instant.ofEpochMilli(suggestion1Millis).plus(1, ChronoUnit.DAYS).toEpochMilli();
+            ExternalTimeSuggestion futureTimeSuggestion2 =
+                    new ExternalTimeSuggestion(elapsedRealtimeMillis, suggestion2Millis);
 
-        // The suggestion should have been ignored so the system clock should not have advanced.
-        assertTrue(System.currentTimeMillis() < suggestion1Millis);
+            // Suggest a change. It shouldn't be used.
+            timeManager.suggestExternalTime(futureTimeSuggestion1);
+            sleepForAsyncOperation();
 
-        // Set the time detector to only use ORIGIN_EXTERNAL.
-        // The suggestion should have been stored and acted upon when the origin list changes.
-        mDeviceConfigShellHelper.put(NAMESPACE_SYSTEM_TIME,
-                DeviceConfigKeys.TimeDetector.KEY_TIME_DETECTOR_ORIGIN_PRIORITIES_OVERRIDE,
-                DeviceConfigKeys.TimeDetector.ORIGIN_EXTERNAL);
-        sleepForAsyncOperation();
-        assertTrue(System.currentTimeMillis() >= suggestion1Millis);
+            // The suggestion should have been ignored so the system clock should not have advanced.
+            assertTrue(System.currentTimeMillis() < suggestion1Millis);
 
-        // Suggest a change. It should be used.
-        timeManager.suggestExternalTime(futureTimeSuggestion2);
-        sleepForAsyncOperation();
-        assertTrue(System.currentTimeMillis() >= suggestion2Millis);
+            // Set the time detector to only use ORIGIN_EXTERNAL.
+            // The suggestion should have been stored and acted upon when the origin list changes.
+            mDeviceConfigShellHelper.put(NAMESPACE_SYSTEM_TIME,
+                    DeviceConfigKeys.TimeDetector.KEY_TIME_DETECTOR_ORIGIN_PRIORITIES_OVERRIDE,
+                    DeviceConfigKeys.TimeDetector.ORIGIN_EXTERNAL);
+            sleepForAsyncOperation();
+            assertTrue(System.currentTimeMillis() >= suggestion1Millis);
 
-        // Now do our best to return the device to its original state.
-        ExternalTimeSuggestion originalTimeSuggestion =
-                new ExternalTimeSuggestion(elapsedRealtimeMillis, startCurrentTimeMillis);
-        timeManager.suggestExternalTime(
-                originalTimeSuggestion);
-        sleepForAsyncOperation();
+            // Suggest a change. It should be used.
+            timeManager.suggestExternalTime(futureTimeSuggestion2);
+            sleepForAsyncOperation();
+            assertTrue(System.currentTimeMillis() >= suggestion2Millis);
+
+            // Now do our best to return the device to its original state.
+            ExternalTimeSuggestion originalTimeSuggestion =
+                    new ExternalTimeSuggestion(elapsedRealtimeMillis, startCurrentTimeMillis);
+            timeManager.suggestExternalTime(
+                    originalTimeSuggestion);
+            sleepForAsyncOperation();
+        } finally {
+            if (disableAutoDetectionAfterTest) {
+                assertTrue(setAutoTimeDetectionEnabledAndSleep(false));
+            }
+        }
     }
 
     /**
@@ -276,6 +293,20 @@ public class TimeManagerTest {
 
             executor.shutdown();
         }
+    }
+
+    private boolean setAutoTimeDetectionEnabledAndSleep(boolean enabled) throws Exception {
+        // Android T does not have a dedicated shell command or API to change time auto detection
+        // setting, so direct Settings changes are used.
+        Context context = InstrumentationRegistry.getInstrumentation().getContext();
+        Settings.Global.putInt(context.getContentResolver(), Settings.Global.AUTO_TIME,
+                enabled ? 1 : 0);
+
+        // Configuration changes are recorded synchronously, but can be handled asynchronously so
+        // sleep. Otherwise, the strategy may not yet understand the config has changed.
+        sleepForAsyncOperation();
+
+        return mTimeDetectorShellHelper.isAutoDetectionEnabled() == enabled;
     }
 
     private static void waitForListenerCallbackCount(

@@ -15,9 +15,13 @@
 -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-     xmlns:androidprv="http://schemas.android.com/apk/prv/res/android"
-     package="com.android.car.updatable" >
+     xmlns:androidprv="http://schemas.android.com/apk/prv/res/android" >
 
+    <!--
+        This file contains the permissions defined by CarService-Builtin(com.android.car)
+        and CarService-updatable(com.[google.]?android.car.updatable). As this is only a
+        resource file, permissions from both packages can be added here.
+    -->
     <permission-group android:name="android.car.permission-group.CAR_MONITORING"
          android:icon="@drawable/perm_group_car"
          android:description="@string/car_permission_desc"
@@ -474,4 +478,12 @@
         android:protectionLevel="signature|privileged"
         android:label="@string/car_permission_label_control_car_app_launch"
         android:description="@string/car_permission_desc_control_car_app_launch"/>
+    <permission android:name="android.car.permission.MANAGE_THREAD_PRIORITY"
+        android:protectionLevel="signature|privileged"
+        android:label="@string/car_permission_label_manage_thread_priority"
+        android:description="@string/car_permission_desc_manage_thread_priority"/>
+    <permission android:name="android.car.permission.BIND_OEM_CAR_SERVICE"
+        android:protectionLevel="signature|privileged"
+        android:label="@string/car_permission_label_bind_oem_car_service"
+        android:description="@string/car_permission_desc_bind_oem_car_service"/>
 </manifest>

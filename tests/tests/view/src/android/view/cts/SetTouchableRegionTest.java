@@ -16,14 +16,17 @@
 
 package android.view.cts;
 
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
+
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.app.Instrumentation;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Region;
-import android.view.AttachedSurfaceControl;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -33,22 +36,18 @@ import android.widget.PopupWindow;
 import com.android.compatibility.common.util.CtsTouchUtils;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import androidx.test.InstrumentationRegistry;
-import androidx.test.filters.LargeTest;
-import androidx.test.rule.ActivityTestRule;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.runner.AndroidJUnit4;
 
 @RunWith(AndroidJUnit4.class)
 public class SetTouchableRegionTest {
     private Instrumentation mInstrumentation;
     private Activity mActivity;
-    @Rule
-    public ActivityTestRule<CtsActivity> mActivityRule =
-        new ActivityTestRule<>(CtsActivity.class);
+    private ActivityScenario<CtsActivity> mScenario;
 
     class MotionRecordingView extends View {
         public MotionRecordingView(Context context) {
@@ -80,20 +79,28 @@ public class SetTouchableRegionTest {
     @Before
     public void setup() {
         mInstrumentation = InstrumentationRegistry.getInstrumentation();
-        mActivity = mActivityRule.getActivity();
+        // Launch activity in fullscreen windowing mode
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.setClass(mInstrumentation.getTargetContext(), CtsActivity.class);
+        final ActivityOptions options = ActivityOptions.makeBasic();
+        options.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+        mScenario = ActivityScenario.launch(intent, options.toBundle());
+        mScenario.onActivity(activity -> {
+            mActivity = activity;
+        });
     }
 
     void tapSync() {
         mInstrumentation.waitForIdleSync();
         assertFalse(mMotionRecordingView.gotEvent());
 
-        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, mActivityRule, mMotionRecordingView);
+        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, null, mMotionRecordingView);
         mInstrumentation.waitForIdleSync();
     }
 
     @Test
     public void testClickthroughRegion() throws Throwable {
-        mActivityRule.runOnUiThread(() -> {
+        mScenario.onActivity(activity -> {
             mMotionRecordingView = new MotionRecordingView(mActivity);
             mActivity.setContentView(mMotionRecordingView);
         });
@@ -101,7 +108,7 @@ public class SetTouchableRegionTest {
         // We have a view filling our entire hierarchy and so a tap should reach it
         assertTrue(mMotionRecordingView.gotEvent());
 
-        mActivityRule.runOnUiThread(() -> {
+        mScenario.onActivity(activity -> {
             mPopupView = new View(mActivity);
             PopupWindow popup = new PopupWindow(mPopupView,
                 ViewGroup.LayoutParams.FILL_PARENT,
@@ -114,7 +121,7 @@ public class SetTouchableRegionTest {
         // and so the tap should not reach us
         assertFalse(mMotionRecordingView.gotEvent());
 
-        mActivityRule.runOnUiThread(() -> {
+        mScenario.onActivity(activity -> {
             mPopupView.getRootSurfaceControl().setTouchableRegion(new Region());
         });
         tapSync();

@@ -19,6 +19,7 @@
     <option name="config-descriptor:metadata" key="parameter" value="instant_app" />
     <option name="config-descriptor:metadata" key="parameter" value="multi_abi" />
     <option name="config-descriptor:metadata" key="parameter" value="secondary_user" />
+    <option name="config-descriptor:metadata" key="parameter" value="multiuser" />
     <target_preparer class="com.android.tradefed.targetprep.DeviceSetup">
         <option name="force-skip-system-props" value="true" /> <!-- avoid restarting device -->
         <option name="set-test-harness" value="false" />
@@ -33,6 +34,11 @@
         <option name="dynamic-config-name" value="CtsMediaMiscTestCases" />
         <option name="version" value="9.0_r1"/>
     </target_preparer>
+    <target_preparer class="com.android.compatibility.common.tradefed.targetprep.DynamicConfigPusher">
+        <option name="target" value="device" />
+        <option name="config-filename" value="CtsMediaMiscTestCases" />
+        <option name="version" value="1.0"/>
+    </target_preparer>
     <target_preparer class="com.android.compatibility.common.tradefed.targetprep.MediaPreparer">
         <option name="push-all" value="true" />
         <option name="media-folder-name" value="CtsMediaMiscTestCases-1.0" />
@@ -41,11 +47,6 @@
     <target_preparer class="com.android.tradefed.targetprep.suite.SuiteApkInstaller">
         <option name="cleanup-apks" value="true" />
         <option name="test-file-name" value="CtsMediaMiscTestCases.apk" />
-    </target_preparer>
-    <target_preparer class="com.android.compatibility.common.tradefed.targetprep.DynamicConfigPusher">
-        <option name="target" value="device" />
-        <option name="config-filename" value="CtsMediaMiscTestCases" />
-        <option name="version" value="1.0"/>
     </target_preparer>
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
         <option name="package" value="android.media.misc.cts" />
@@ -57,5 +58,6 @@
         <option name="hidden-api-checks" value="false" />
         <!-- disable isolated storage so tests can access dynamic config stored in /sdcard. -->
         <option name="isolated-storage" value="false" />
+        <option name="exclude-annotation" value="com.android.bedstead.harrier.annotations.RequireRunOnWorkProfile" />
     </test>
 </configuration>

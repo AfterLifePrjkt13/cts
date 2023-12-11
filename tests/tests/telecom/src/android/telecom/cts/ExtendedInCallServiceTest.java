@@ -21,6 +21,7 @@ import static com.android.compatibility.common.util.BlockedNumberUtil.deleteBloc
 import static com.android.compatibility.common.util.BlockedNumberUtil.insertBlockedNumber;
 
 import android.app.UiModeManager;
+import com.android.compatibility.common.util.FeatureUtil;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -344,7 +345,10 @@ public class ExtendedInCallServiceTest extends BaseTelecomTestWithMockServices {
         if (!mShouldTestTelecom) {
             return;
         }
-
+        // carMode is not supported in Wear OS
+        if (FeatureUtil.isWatch()) {
+            return;
+        }
         addAndVerifyNewIncomingCall(createTestNumber(), null);
         MockConnection connection1 = verifyConnectionForIncomingCall(0);
         final MockInCallService inCallService = mInCallCallbacks.getService();

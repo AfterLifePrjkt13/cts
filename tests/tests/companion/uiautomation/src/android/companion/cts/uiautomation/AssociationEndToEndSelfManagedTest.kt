@@ -8,6 +8,7 @@ import android.companion.cts.common.CompanionActivity
 import android.companion.cts.common.RecordingCallback.OnAssociationCreated
 import android.content.Intent
 import android.platform.test.annotations.AppModeFull
+import com.android.compatibility.common.util.FeatureUtil
 import org.junit.Assume.assumeFalse
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,6 +35,7 @@ class AssociationEndToEndSelfManagedTest(
     override fun setUp() {
         super.setUp()
 
+        assumeFalse(FeatureUtil.isWatch())
         // TODO(b/211602270): Add support for WATCH and "null" profiles in the
         // confirmation UI (the "self-managed" flow variant).
         assumeFalse(profile == null)

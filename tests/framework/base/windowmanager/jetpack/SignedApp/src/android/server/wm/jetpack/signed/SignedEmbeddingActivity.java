@@ -18,11 +18,12 @@ package android.server.wm.jetpack.signed;
 
 import static android.server.wm.jetpack.utils.ActivityEmbeddingUtil.DEFAULT_SPLIT_RATIO;
 import static android.server.wm.jetpack.utils.ActivityEmbeddingUtil.EMBEDDED_ACTIVITY_ID;
-import static android.server.wm.jetpack.utils.ActivityEmbeddingUtil.createWildcardSplitPairRule;
+import static android.server.wm.jetpack.utils.ActivityEmbeddingUtil.createSplitPairRuleBuilderWithJava8Predicate;
 import static android.server.wm.jetpack.utils.ActivityEmbeddingUtil.startActivityCrossUidInSplit;
 import static android.server.wm.jetpack.utils.ExtensionUtil.assumeExtensionSupportedDevice;
 import static android.server.wm.jetpack.utils.ExtensionUtil.getWindowExtensions;
 import static android.server.wm.jetpack.utils.WindowManagerJetpackTestBase.EXTRA_EMBED_ACTIVITY;
+import static android.server.wm.jetpack.utils.WindowManagerJetpackTestBase.EXTRA_SPLIT_RATIO;
 
 import static org.junit.Assume.assumeNotNull;
 
@@ -30,6 +31,7 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.os.Bundle;
+import android.server.wm.jetpack.utils.JavaConsumerAdapter;
 import android.server.wm.jetpack.utils.TestActivityKnownEmbeddingCerts;
 import android.server.wm.jetpack.utils.TestValueCountConsumer;
 
@@ -83,14 +85,19 @@ public class SignedEmbeddingActivity extends Activity {
         }
 
         TestValueCountConsumer<List<SplitInfo>> splitInfoConsumer = new TestValueCountConsumer<>();
-        embeddingComponent.setSplitInfoCallback(splitInfoConsumer);
+        if (getWindowExtensions().getVendorApiLevel() >= 2) {
+            embeddingComponent.setSplitInfoCallback(splitInfoConsumer);
+        } else {
+            embeddingComponent.setSplitInfoCallback(new JavaConsumerAdapter(splitInfoConsumer));
+        }
 
-        SplitPairRule splitPairRule = new SplitPairRule.Builder(
+        SplitPairRule splitPairRule = createSplitPairRuleBuilderWithJava8Predicate(
                 activityActivityPair -> true /* activityActivityPredicate */,
                 activityIntentPair -> true /* activityIntentPredicate */,
                 parentWindowMetrics -> true /* parentWindowMetricsPredicate */)
-                .setSplitRatio(DEFAULT_SPLIT_RATIO).build();
-        embeddingComponent.setEmbeddingRules(Collections.singleton(createWildcardSplitPairRule()));
+                .setSplitRatio(getIntent().getFloatExtra(EXTRA_SPLIT_RATIO, DEFAULT_SPLIT_RATIO))
+                .build();
+        embeddingComponent.setEmbeddingRules(Collections.singleton(splitPairRule));
 
         // Launch an activity from a different UID that recognizes this package's signature and
         // verify that it is split with this activity.

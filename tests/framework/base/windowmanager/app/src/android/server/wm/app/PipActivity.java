@@ -32,6 +32,7 @@ import static android.server.wm.app.Components.PipActivity.EXTRA_DISMISS_KEYGUAR
 import static android.server.wm.app.Components.PipActivity.EXTRA_ENTER_PIP;
 import static android.server.wm.app.Components.PipActivity.EXTRA_ENTER_PIP_ASPECT_RATIO_DENOMINATOR;
 import static android.server.wm.app.Components.PipActivity.EXTRA_ENTER_PIP_ASPECT_RATIO_NUMERATOR;
+import static android.server.wm.app.Components.PipActivity.EXTRA_ENTER_PIP_ON_BACK_PRESSED;
 import static android.server.wm.app.Components.PipActivity.EXTRA_ENTER_PIP_ON_PAUSE;
 import static android.server.wm.app.Components.PipActivity.EXTRA_ENTER_PIP_ON_PIP_REQUESTED;
 import static android.server.wm.app.Components.PipActivity.EXTRA_ENTER_PIP_ON_USER_LEAVE_HINT;
@@ -82,6 +83,7 @@ import java.util.List;
 public class PipActivity extends AbstractLifecycleLogActivity {
 
     private boolean mEnteredPictureInPicture;
+    private boolean mEnterPipOnBackPressed;
     private RemoteCallback mCb;
 
     private Handler mHandler = new Handler();
@@ -91,7 +93,13 @@ public class PipActivity extends AbstractLifecycleLogActivity {
             if (intent != null) {
                 switch (intent.getAction()) {
                     case ACTION_ENTER_PIP:
-                        enterPictureInPictureMode();
+                        enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+                        if (intent.getExtras() != null) {
+                            mCb = (RemoteCallback) intent.getExtras().get(EXTRA_SET_PIP_CALLBACK);
+                            if (mCb != null) {
+                                mCb.sendResult(new Bundle());
+                            }
+                        }
                         break;
                     case ACTION_MOVE_TO_BACK:
                         moveTaskToBack(false /* nonRoot */);
@@ -293,6 +301,9 @@ public class PipActivity extends AbstractLifecycleLogActivity {
             dumpConfiguration(getResources().getConfiguration());
             dumpConfigInfo();
         }
+
+        mEnterPipOnBackPressed = Boolean.parseBoolean(
+                getIntent().getStringExtra(EXTRA_ENTER_PIP_ON_BACK_PRESSED));
     }
 
     @Override
@@ -386,6 +397,15 @@ public class PipActivity extends AbstractLifecycleLogActivity {
         super.onConfigurationChanged(newConfig);
         dumpConfiguration(newConfig);
         dumpConfigInfo();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (mEnterPipOnBackPressed) {
+            enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+        } else {
+            super.onBackPressed();
+        }
     }
 
     /**

@@ -116,8 +116,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".activities.MultiWindowLoginActivity"/>
+        <activity android:name=".activities.MultiWindowLoginActivity"
+             android:resizeableActivity="true"
+             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"/>
         <activity android:name=".activities.MultiWindowEmptyActivity"
+             android:resizeableActivity="true"
+             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
              android:taskAffinity="nobody.but.EmptyActivity"
              android:exported="true"/>
 
@@ -150,6 +154,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity android:name=".activities.FadeInActivity"/>
+        <activity android:name=".activities.MultipleStepsSignInActivity"/>
         <activity android:name=".activities.FieldsNoPasswordActivity"/>
         <activity android:name=".activities.AugmentedAuthActivity" />
         <activity android:name=".activities.SimpleAfterLoginActivity"/>

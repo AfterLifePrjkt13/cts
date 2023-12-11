@@ -666,6 +666,8 @@ public class CodecEncoderTest extends CodecEncoderTestBase {
         final int ADAPTIVE_BR_INTERVAL = 3; // change br every 3 seconds.
         final int ADAPTIVE_BR_DUR_FRM = mFrameRate * ADAPTIVE_BR_INTERVAL;
         final int BR_CHANGE_REQUESTS = 7;
+        // TODO(b/251265293) Reduce the allowed deviation after improving the test conditions
+        final float MAX_BITRATE_DEVIATION = 60.0f; // allowed bitrate deviation in %
         mOutputBuff = new OutputManager();
         mSaveToMem = true;
         {
@@ -717,7 +719,7 @@ public class CodecEncoderTest extends CodecEncoderTestBase {
                 if (ENABLE_LOGS) {
                     Log.d(LOG_TAG, log + "relative br error is " + brDev + '%');
                 }
-                if (brDev > 50) {
+                if (brDev > MAX_BITRATE_DEVIATION) {
                     fail(log + "relative br error is too large " + brDev + '%');
                 }
             }

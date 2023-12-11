@@ -20,6 +20,7 @@ android_test {
     name: "CtsVoiceInteractionTestCases",
     defaults: ["cts_defaults"],
     static_libs: [
+        "CtsAttentionServiceDevice",
         "CtsVoiceInteractionCommon",
         "ctstestrunner-axt",
         "compatibility-device-util-axt",
@@ -35,7 +36,7 @@ android_test {
         "service/src/android/voiceinteraction/service/MainInteractionSessionService.java",
         "service/src/android/voiceinteraction/service/MainRecognitionService.java",
         "service/src/android/voiceinteraction/service/EventPayloadParcelable.java",
-        "service/src/android/voiceinteraction/service/EventPayloadParcelable.aidl"
+        "service/src/android/voiceinteraction/service/EventPayloadParcelable.aidl",
     ],
     // Tag this module as a cts test artifact
     test_suites: [

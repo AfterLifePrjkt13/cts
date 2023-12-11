@@ -29,8 +29,8 @@
 
         <uses-library android:name="android.test.runner"/>
 
-        <!-- TestActivity etc are merged from util/AndroidManifest.xml -->
-
+        <uses-library android:name="androidx.window.extensions"
+                      android:required="false" />
     </application>
 
     <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner"

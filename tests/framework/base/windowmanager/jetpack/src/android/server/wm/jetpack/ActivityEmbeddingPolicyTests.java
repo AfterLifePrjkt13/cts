@@ -16,6 +16,8 @@
 
 package android.server.wm.jetpack;
 
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
+import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 import static android.server.wm.jetpack.second.Components.SECOND_UNTRUSTED_EMBEDDING_ACTIVITY;
 import static android.server.wm.jetpack.signed.Components.SIGNED_EMBEDDING_ACTIVITY;
 import static android.server.wm.jetpack.utils.ActivityEmbeddingUtil.createWildcardSplitPairRule;
@@ -23,7 +25,6 @@ import static android.server.wm.jetpack.utils.ExtensionUtil.assumeExtensionSuppo
 import static android.server.wm.jetpack.utils.ExtensionUtil.getWindowExtensions;
 import static android.server.wm.jetpack.utils.WindowManagerJetpackTestBase.EXTRA_EMBED_ACTIVITY;
 import static android.server.wm.jetpack.utils.WindowManagerJetpackTestBase.startActivityFromActivity;
-import static android.server.wm.jetpack.utils.WindowManagerJetpackTestBase.startActivityNewTask;
 import static android.server.wm.jetpack.utils.WindowManagerJetpackTestBase.startActivityOnDisplaySingleTop;
 import static android.view.Display.DEFAULT_DISPLAY;
 
@@ -37,11 +38,13 @@ import android.app.ActivityManager;
 import android.app.UiAutomation;
 import android.content.ComponentName;
 import android.os.Bundle;
+import android.platform.test.annotations.Presubmit;
 import android.server.wm.ActivityManagerTestBase;
 import android.server.wm.Condition;
 import android.server.wm.NestedShellPermission;
 import android.server.wm.WindowManagerState;
 import android.server.wm.jetpack.utils.TestActivityKnownEmbeddingCerts;
+import android.server.wm.jetpack.utils.TestActivityLauncher;
 import android.server.wm.jetpack.utils.TestConfigChangeHandlingActivity;
 
 import androidx.annotation.NonNull;
@@ -49,6 +52,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.window.extensions.WindowExtensions;
 import androidx.window.extensions.embedding.ActivityEmbeddingComponent;
 import androidx.window.extensions.embedding.SplitPairRule;
+
+import com.android.compatibility.common.util.ApiTest;
 
 import org.junit.After;
 import org.junit.Before;
@@ -66,6 +71,7 @@ import java.util.function.BooleanSupplier;
  * Build/Install/Run:
  *     atest CtsWindowManagerJetpackTestCases:ActivityEmbeddingPolicyTests
  */
+@Presubmit
 @RunWith(AndroidJUnit4.class)
 public class ActivityEmbeddingPolicyTests extends ActivityManagerTestBase {
     protected ActivityEmbeddingComponent mActivityEmbeddingComponent;
@@ -74,8 +80,6 @@ public class ActivityEmbeddingPolicyTests extends ActivityManagerTestBase {
     @Before
     public void setUp() throws Exception {
         super.setUp();
-        // TODO(b/207070762): remove the assumption after shell transition enabled.
-        assumeFalse(ENABLE_SHELL_TRANSITIONS);
         assumeExtensionSupportedDevice();
         WindowExtensions windowExtensions = getWindowExtensions();
         assumeNotNull(windowExtensions);
@@ -94,10 +98,20 @@ public class ActivityEmbeddingPolicyTests extends ActivityManagerTestBase {
      * Verifies that all input is dropped for activities that are embedded and being animated with
      * untrusted embedding.
      */
+    @ApiTest(apis = {"com.android.server.wm.ActivityRecord#setDropInputForAnimation",
+            "androidx.window.extensions.embedding.ActivityEmbeddingComponent#setEmbeddingRules"})
     @Test
     public void testInputDuringAnimationIsNotAllowed_untrustedEmbedding() {
-        Activity primaryActivity = startActivityNewTask(mContext, mInstrumentation,
-                TestConfigChangeHandlingActivity.class, null /* activityId */);
+        // TODO(b/207070762): remove the test when cleanup legacy app transition
+        // We don't need to disable input with Shell transition, because we won't pass the surface
+        // to app.
+        assumeFalse(ENABLE_SHELL_TRANSITIONS);
+
+        Activity primaryActivity = new TestActivityLauncher<>(mContext,
+                TestConfigChangeHandlingActivity.class)
+                .addIntentFlag(FLAG_ACTIVITY_NEW_TASK)
+                .setWindowingMode(WINDOWING_MODE_FULLSCREEN)
+                .launch(mInstrumentation);
 
         SplitPairRule splitPairRule = createWildcardSplitPairRule(true /* shouldClearTop */);
         mActivityEmbeddingComponent.setEmbeddingRules(Collections.singleton(splitPairRule));
@@ -139,6 +153,11 @@ public class ActivityEmbeddingPolicyTests extends ActivityManagerTestBase {
      */
     @Test
     public void testInputDuringAnimationIsNotAllowed_trustedEmbedding() {
+        // TODO(b/207070762): remove the test when cleanup legacy app transition
+        // We don't need to disable input with Shell transition, because we won't pass the surface
+        // to app.
+        assumeFalse(ENABLE_SHELL_TRANSITIONS);
+
         // Extend the animation scale, so that the test has enough time to catch the state during
         // transition.
         UiAutomation automation = mInstrumentation.getUiAutomation();

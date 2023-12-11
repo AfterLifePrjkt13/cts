@@ -66,6 +66,7 @@ android_test {
         "junit-params",
         "testng",
         "truth-prebuilt",
+        "Harrier",
         "mockito-target-minus-junit4",
         "androidx.heifwriter_heifwriter",
         "CtsCameraUtils",

@@ -27,6 +27,7 @@ import android.hardware.camera2.CameraManager
 import android.os.Build
 import android.os.Process
 import android.permission.PermissionManager
+import android.platform.test.annotations.AsbSecurityTest
 import android.provider.DeviceConfig
 import android.provider.Settings
 import android.server.wm.WindowManagerStateHelper
@@ -40,6 +41,7 @@ import com.android.compatibility.common.util.SystemUtil.callWithShellPermissionI
 import com.android.compatibility.common.util.SystemUtil.eventually
 import com.android.compatibility.common.util.SystemUtil.runShellCommand
 import com.android.compatibility.common.util.SystemUtil.runWithShellPermissionIdentity
+import com.android.sts.common.util.StsExtraBusinessLogicTestCase
 import org.junit.After
 import org.junit.Assert
 import org.junit.Assert.assertEquals
@@ -60,6 +62,7 @@ private const val SHELL_PKG = "com.android.shell"
 private const val USE_CAMERA = "use_camera"
 private const val USE_MICROPHONE = "use_microphone"
 private const val USE_HOTWORD = "use_hotword"
+private const val FINISH_EARLY = "finish_early"
 private const val INTENT_ACTION = "test.action.USE_CAMERA_OR_MIC"
 private const val PRIVACY_CHIP_ID = "com.android.systemui:id/privacy_chip"
 private const val CAR_MIC_PRIVACY_CHIP_ID = "com.android.systemui:id/mic_privacy_chip"
@@ -73,7 +76,7 @@ private const val UNEXPECTED_TIMEOUT_MILLIS = 1000
 private const val TIMEOUT_MILLIS: Long = 20000
 private const val TV_MIC_INDICATOR_WINDOW_TITLE = "MicrophoneCaptureIndicator"
 
-class CameraMicIndicatorsPermissionTest {
+class CameraMicIndicatorsPermissionTest : StsExtraBusinessLogicTestCase {
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.context
     private val uiAutomation: UiAutomation = instrumentation.uiAutomation
@@ -86,14 +89,16 @@ class CameraMicIndicatorsPermissionTest {
     private val isCar = packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
     private var wasEnabled = false
     private val micLabel = packageManager.getPermissionGroupInfo(
-        Manifest.permission_group.MICROPHONE, 0).loadLabel(packageManager).toString()
+        Manifest.permission_group.MICROPHONE, 0).loadLabel(packageManager).toString().toLowerCase()
     private val cameraLabel = packageManager.getPermissionGroupInfo(
-        Manifest.permission_group.CAMERA, 0).loadLabel(packageManager).toString()
+        Manifest.permission_group.CAMERA, 0).loadLabel(packageManager).toString().toLowerCase()
     private var isScreenOn = false
     private var screenTimeoutBeforeTest: Long = 0L
 
     @get:Rule
     val disableAnimationRule = DisableAnimationRule()
+
+    constructor() : super()
 
     companion object {
         const val SAFETY_CENTER_ENABLED = "safety_center_is_enabled"
@@ -167,17 +172,25 @@ class CameraMicIndicatorsPermissionTest {
         Thread.sleep(DELAY_MILLIS)
     }
 
-    private fun openApp(useMic: Boolean, useCamera: Boolean, useHotword: Boolean) {
+    private fun openApp(
+        useMic: Boolean,
+        useCamera: Boolean,
+        useHotword: Boolean,
+        finishEarly: Boolean = false
+    ) {
         context.startActivity(Intent(INTENT_ACTION).apply {
             putExtra(USE_CAMERA, useCamera)
             putExtra(USE_MICROPHONE, useMic)
             putExtra(USE_HOTWORD, useHotword)
+            putExtra(FINISH_EARLY, finishEarly)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
     }
 
     @Test
     fun testCameraIndicator() {
+        // If camera is not available skip the test
+        assumeTrue(packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA))
         val manager = context.getSystemService(CameraManager::class.java)!!
         assumeTrue(manager.cameraIdList.isNotEmpty())
         changeSafetyCenterFlag(false.toString())
@@ -188,6 +201,13 @@ class CameraMicIndicatorsPermissionTest {
     fun testMicIndicator() {
         changeSafetyCenterFlag(false.toString())
         testCameraAndMicIndicator(useMic = true, useCamera = false)
+    }
+
+    @Test
+    @AsbSecurityTest(cveBugId = [258672042])
+    fun testMicIndicatorWithManualFinishOpStillShows() {
+        changeSafetyCenterFlag(false.toString())
+        testCameraAndMicIndicator(useMic = true, useCamera = false, finishEarly = true)
     }
 
     @Test
@@ -203,6 +223,8 @@ class CameraMicIndicatorsPermissionTest {
         // Car has separate panels for mic and camera for now.
         // TODO(b/218788634): enable this test for car once the new camera indicator is implemented.
         assumeFalse(isCar)
+        // If camera is not available skip the test
+        assumeTrue(packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA))
         changeSafetyCenterFlag(false.toString())
         testCameraAndMicIndicator(useMic = false, useCamera = true, chainUsage = true)
     }
@@ -268,14 +290,17 @@ class CameraMicIndicatorsPermissionTest {
         useCamera: Boolean,
         useHotword: Boolean = false,
         chainUsage: Boolean = false,
-        safetyCenterEnabled: Boolean = false
+        safetyCenterEnabled: Boolean = false,
+        finishEarly: Boolean = false
     ) {
+        // If camera is not available skip the test
+        assumeTrue(packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA))
         var chainAttribution: AttributionSource? = null
-        openApp(useMic, useCamera, useHotword)
+        openApp(useMic, useCamera, useHotword, finishEarly)
         try {
             eventually {
-                val appView = uiDevice.findObject(UiSelector().textContains(APP_LABEL))
-                assertTrue("View with text $APP_LABEL not found", appView.exists())
+                val appView = uiDevice.findObject(By.textContains(APP_LABEL))
+                assertNotNull("View with text $APP_LABEL not found", appView)
             }
             if (chainUsage) {
                 chainAttribution = createChainAttribution()
@@ -286,20 +311,23 @@ class CameraMicIndicatorsPermissionTest {
                 }
             }
 
-            if (isTv) {
-                assertTvIndicatorsShown(useMic, useCamera, useHotword)
-            } else if (isCar) {
-                assertCarIndicatorsShown(useMic, useCamera, useHotword, chainUsage)
-            } else {
-                // Hotword gets remapped to RECORD_AUDIO on handheld, so handheld should show a mic
-                // indicator
+            if (!isTv && !isCar) {
                 uiDevice.openQuickSettings()
-                assertPrivacyChipAndIndicatorsPresent(
-                    useMic,
-                    useCamera,
-                    chainUsage,
-                    safetyCenterEnabled
-                )
+            }
+            assertIndicatorsShown(useMic, useCamera, useHotword, chainUsage,
+                safetyCenterEnabled)
+
+            if (finishEarly) {
+                // Assert that the indicator doesn't go away
+                val indicatorGoneException: Exception? = try {
+                    eventually {
+                        assertIndicatorsShown(false, false, false)
+                    }
+                    null
+                } catch (e: Exception) {
+                    e
+                }
+                assertNotNull("Expected the indicator to be present", indicatorGoneException)
             }
         } finally {
             if (chainAttribution != null) {
@@ -309,8 +337,25 @@ class CameraMicIndicatorsPermissionTest {
         }
     }
 
+    private fun assertIndicatorsShown(
+        useMic: Boolean,
+        useCamera: Boolean,
+        useHotword: Boolean = false,
+        chainUsage: Boolean = false,
+        safetyCenterEnabled: Boolean = false,
+        ) {
+        if (isTv) {
+            assertTvIndicatorsShown(useMic, useCamera, useHotword)
+        } else if (isCar) {
+            assertCarIndicatorsShown(useMic, useCamera, useHotword, chainUsage)
+        } else {
+            assertPrivacyChipAndIndicatorsPresent(useMic, useCamera, chainUsage,
+                safetyCenterEnabled)
+        }
+    }
+
     private fun assertTvIndicatorsShown(useMic: Boolean, useCamera: Boolean, useHotword: Boolean) {
-        if (useMic || useHotword) {
+        if (useMic || useHotword || (!useMic && !useCamera && !useHotword)) {
             val found = WindowManagerStateHelper()
                 .waitFor("Waiting for the mic indicator window to come up") {
                     it.containsWindow(TV_MIC_INDICATOR_WINDOW_TITLE) &&
@@ -345,7 +390,7 @@ class CameraMicIndicatorsPermissionTest {
                 assertNotNull("Did not find camera chip", cameraPrivacyChip)
                 // Click to chip to show the panel.
                 cameraPrivacyChip.click()
-            } else if (useHotword) {
+            } else {
                 assertNull("Found mic chip, but did not expect to", micPrivacyChip)
                 assertNull("Found camera chip, but did not expect to", cameraPrivacyChip)
             }
@@ -357,18 +402,7 @@ class CameraMicIndicatorsPermissionTest {
                 assertChainMicAndOtherCameraUsed(false)
                 return@eventually
             }
-            if (useHotword) {
-                // There should be no privacy panel when using hot word
-                val micLabelView = uiDevice.findObject(UiSelector().textContains(micLabel))
-                assertFalse("View with text $micLabel found, but did not expect to",
-                    micLabelView.exists())
-                val cameraLabelView = uiDevice.findObject(UiSelector().textContains(cameraLabel))
-                assertFalse("View with text $cameraLabel found, but did not expect to",
-                    cameraLabelView.exists())
-                val appView = uiDevice.findObject(UiSelector().textContains(APP_LABEL))
-                assertFalse("View with text $APP_LABEL found, but did not expect to",
-                    appView.exists())
-            } else if (useMic) {
+            if (useMic) {
                 // There should be a mic privacy panel after mic privacy chip is clicked
                 val micLabelView = uiDevice.findObject(UiSelector().textContains(micLabel))
                 assertTrue("View with text $micLabel not found", micLabelView.exists())
@@ -380,6 +414,17 @@ class CameraMicIndicatorsPermissionTest {
                 assertTrue("View with text $cameraLabel not found", cameraLabelView.exists())
                 val appView = uiDevice.findObject(UiSelector().textContains(APP_LABEL))
                 assertTrue("View with text $APP_LABEL not found", appView.exists())
+            } else {
+                // There should be no privacy panel when using hot word
+                val micLabelView = uiDevice.findObject(UiSelector().textContains(micLabel))
+                assertFalse("View with text $micLabel found, but did not expect to",
+                    micLabelView.exists())
+                val cameraLabelView = uiDevice.findObject(UiSelector().textContains(cameraLabel))
+                assertFalse("View with text $cameraLabel found, but did not expect to",
+                    cameraLabelView.exists())
+                val appView = uiDevice.findObject(UiSelector().textContains(APP_LABEL))
+                assertFalse("View with text $APP_LABEL found, but did not expect to",
+                    appView.exists())
             }
         }
     }
@@ -391,7 +436,7 @@ class CameraMicIndicatorsPermissionTest {
         safetyCenterEnabled: Boolean = false
     ) {
         // Ensure the privacy chip is present (or not)
-        val chipFound = isChipPresent()
+        val chipFound = isChipPresent(useMic || useCamera)
         if (useMic || useCamera) {
             assertTrue("Did not find chip", chipFound)
         } else { // hotword
@@ -405,20 +450,21 @@ class CameraMicIndicatorsPermissionTest {
                 return@eventually
             }
             if (useMic) {
-                val iconView = uiDevice.findObject(UiSelector().descriptionContains(micLabel))
-                assertTrue("View with description $micLabel not found", iconView.exists())
+                val iconView = uiDevice.findObject(By.descContains(micLabel))
+                assertNotNull("View with description $micLabel not found", iconView)
             }
             if (useCamera) {
-                val iconView = uiDevice.findObject(UiSelector().descriptionContains(cameraLabel))
-                assertTrue("View with text $APP_LABEL not found", iconView.exists())
+                val iconView = uiDevice.findObject(By.descContains(cameraLabel))
+                assertNotNull("View with text $APP_LABEL not found", iconView)
             }
-            val appView = uiDevice.findObject(UiSelector().textContains(APP_LABEL))
-            assertTrue("View with text $APP_LABEL not found", appView.exists())
+            val appView = uiDevice.findObject(By.textContains(APP_LABEL))
+            assertNotNull("View with text $APP_LABEL not found", appView)
             if (safetyCenterEnabled) {
                 assertTrue("Did not find safety center views",
                     uiDevice.findObjects(By.res(SAFETY_CENTER_ITEM_ID)).size > 0)
             }
         }
+        uiDevice.pressBack()
     }
 
     private fun createChainAttribution(): AttributionSource? {
@@ -457,13 +503,15 @@ class CameraMicIndicatorsPermissionTest {
         assertEquals("Expected only one shell view", 1, shellView.size)
     }
 
-    private fun isChipPresent(): Boolean {
+    private fun isChipPresent(clickChip: Boolean): Boolean {
         var chipFound = false
         try {
             eventually {
                 val privacyChip = uiDevice.findObject(By.res(PRIVACY_CHIP_ID))
                 assertNotNull("view with id $PRIVACY_CHIP_ID not found", privacyChip)
-                privacyChip.click()
+                if (clickChip) {
+                    privacyChip.click()
+                }
                 chipFound = true
             }
         } catch (e: Exception) {

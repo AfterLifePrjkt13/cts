@@ -50,6 +50,7 @@ import android.util.Log;
 import androidx.test.filters.SdkSuppress;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.compatibility.common.util.ApiLevelUtil;
 import com.android.compatibility.common.util.ShellIdentityUtils;
 import com.android.compatibility.common.util.SystemUtil;
 
@@ -272,6 +273,29 @@ public class ConcurrencyTest extends WifiJUnit3TestBase {
     private boolean waitForBroadcasts(int waitSingleSync) {
         return waitForBroadcasts(
                 new LinkedList<Integer>(Arrays.asList(waitSingleSync)));
+    }
+
+    private NetworkInfo.DetailedState waitForNextNetworkState() {
+        assertTrue(waitForBroadcasts(MySync.NETWORK_INFO));
+        assertNotNull(mMySync.expectedNetworkInfo);
+        return mMySync.expectedNetworkInfo.getDetailedState();
+    }
+
+    private boolean waitForConnectedNetworkState() {
+        // The possible orders of network states are:
+        // * IDLE > CONNECTING > CONNECTED for lazy initialization
+        // * DISCONNECTED > CONNECTING > CONNECTED for previous group removal
+        // * CONNECTING > CONNECTED
+        NetworkInfo.DetailedState state = waitForNextNetworkState();
+        if (state == NetworkInfo.DetailedState.IDLE
+                || state == NetworkInfo.DetailedState.DISCONNECTED) {
+            state = waitForNextNetworkState();
+        }
+        if (ApiLevelUtil.isAtLeast(Build.VERSION_CODES.TIRAMISU)
+            && state == NetworkInfo.DetailedState.CONNECTING) {
+            state = waitForNextNetworkState();
+        }
+        return state == NetworkInfo.DetailedState.CONNECTED;
     }
 
     private boolean waitForServiceResponse(MyResponse waitResponse) {
@@ -508,21 +532,7 @@ public class ConcurrencyTest extends WifiJUnit3TestBase {
         mWifiP2pManager.createGroup(mWifiP2pChannel, mActionListener);
         assertTrue(waitForServiceResponse(mMyResponse));
         assertTrue(mMyResponse.success);
-
-        // The first network state might be IDLE due to
-        // lazy initialization, but not CONNECTED.
-        for (int i = 0; i < 2; i++) {
-            assertTrue(waitForBroadcasts(MySync.NETWORK_INFO));
-            assertNotNull(mMySync.expectedNetworkInfo);
-            if (NetworkInfo.DetailedState.CONNECTED ==
-                    mMySync.expectedNetworkInfo.getDetailedState()) {
-                break;
-            }
-            assertEquals(NetworkInfo.DetailedState.IDLE,
-                    mMySync.expectedNetworkInfo.getDetailedState());
-        }
-        assertEquals(NetworkInfo.DetailedState.CONNECTED,
-                mMySync.expectedNetworkInfo.getDetailedState());
+        assertTrue(waitForConnectedNetworkState());
 
         resetResponse(mMyResponse);
         mWifiP2pManager.requestNetworkInfo(mWifiP2pChannel,
@@ -660,21 +670,7 @@ public class ConcurrencyTest extends WifiJUnit3TestBase {
         mWifiP2pManager.createGroup(mWifiP2pChannel, mActionListener);
         assertTrue(waitForServiceResponse(mMyResponse));
         assertTrue(mMyResponse.success);
-
-        // The first network state might be IDLE due to
-        // lazy initialization, but not CONNECTED.
-        for (int i = 0; i < 2; i++) {
-            assertTrue(waitForBroadcasts(MySync.NETWORK_INFO));
-            assertNotNull(mMySync.expectedNetworkInfo);
-            if (NetworkInfo.DetailedState.CONNECTED ==
-                    mMySync.expectedNetworkInfo.getDetailedState()) {
-                break;
-            }
-            assertEquals(NetworkInfo.DetailedState.IDLE,
-                    mMySync.expectedNetworkInfo.getDetailedState());
-        }
-        assertEquals(NetworkInfo.DetailedState.CONNECTED,
-                mMySync.expectedNetworkInfo.getDetailedState());
+        assertTrue(waitForConnectedNetworkState());
 
         resetResponse(mMyResponse);
         mWifiP2pManager.removeGroup(mWifiP2pChannel, mActionListener);
@@ -707,10 +703,7 @@ public class ConcurrencyTest extends WifiJUnit3TestBase {
         mWifiP2pManager.createGroup(mWifiP2pChannel, mActionListener);
         assertTrue(waitForServiceResponse(mMyResponse));
         assertTrue(mMyResponse.success);
-        assertTrue(waitForBroadcasts(MySync.NETWORK_INFO));
-        assertNotNull(mMySync.expectedNetworkInfo);
-        assertEquals(NetworkInfo.DetailedState.CONNECTED,
-                mMySync.expectedNetworkInfo.getDetailedState());
+        assertTrue(waitForConnectedNetworkState());
 
         resetResponse(mMyResponse);
         mWifiP2pManager.removeGroup(mWifiP2pChannel, mActionListener);
@@ -812,21 +805,7 @@ public class ConcurrencyTest extends WifiJUnit3TestBase {
         mWifiP2pManager.createGroup(mWifiP2pChannel, mActionListener);
         assertTrue(waitForServiceResponse(mMyResponse));
         assertTrue(mMyResponse.success);
-
-        // The first network state might be IDLE due to
-        // lazy initialization, but not CONNECTED.
-        for (int i = 0; i < 2; i++) {
-            assertTrue(waitForBroadcasts(MySync.NETWORK_INFO));
-            assertNotNull(mMySync.expectedNetworkInfo);
-            if (NetworkInfo.DetailedState.CONNECTED
-                    == mMySync.expectedNetworkInfo.getDetailedState()) {
-                break;
-            }
-            assertEquals(NetworkInfo.DetailedState.IDLE,
-                    mMySync.expectedNetworkInfo.getDetailedState());
-        }
-        assertEquals(NetworkInfo.DetailedState.CONNECTED,
-                mMySync.expectedNetworkInfo.getDetailedState());
+        assertTrue(waitForConnectedNetworkState());
 
         resetResponse(mMyResponse);
         MacAddress peerMacAddress = MacAddress.fromString(mTestWifiP2pPeerConfig.deviceAddress);

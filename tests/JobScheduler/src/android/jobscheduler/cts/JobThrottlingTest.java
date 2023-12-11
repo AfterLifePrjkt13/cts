@@ -18,15 +18,10 @@ package android.jobscheduler.cts;
 
 import static android.app.job.JobInfo.NETWORK_TYPE_ANY;
 import static android.app.job.JobInfo.NETWORK_TYPE_NONE;
-import static android.jobscheduler.cts.ConnectivityConstraintTest.ensureSavedWifiNetwork;
-import static android.jobscheduler.cts.ConnectivityConstraintTest.isWiFiConnected;
-import static android.jobscheduler.cts.ConnectivityConstraintTest.setWifiState;
 import static android.jobscheduler.cts.TestAppInterface.TEST_APP_PACKAGE;
 import static android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED;
 
 import static com.android.compatibility.common.util.TestUtils.waitUntil;
-
-import static junit.framework.Assert.fail;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -34,7 +29,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 
-import android.Manifest;
 import android.app.AppOpsManager;
 import android.app.job.JobInfo;
 import android.app.job.JobParameters;
@@ -44,9 +38,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.jobscheduler.cts.jobtestapp.TestJobSchedulerReceiver;
-import android.location.LocationManager;
-import android.net.ConnectivityManager;
-import android.net.wifi.WifiManager;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.os.Temperature;
@@ -64,22 +55,13 @@ import androidx.test.runner.AndroidJUnit4;
 import com.android.compatibility.common.util.AppOpsUtils;
 import com.android.compatibility.common.util.AppStandbyUtils;
 import com.android.compatibility.common.util.BatteryUtils;
-import com.android.compatibility.common.util.CallbackAsserter;
 import com.android.compatibility.common.util.DeviceConfigStateHelper;
-import com.android.compatibility.common.util.SystemUtil;
 import com.android.compatibility.common.util.ThermalUtils;
-
-import junit.framework.AssertionFailedError;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Tests related to job throttling -- device idle, app standby and battery saver.
@@ -106,22 +88,15 @@ public class JobThrottlingTest {
 
     private Context mContext;
     private UiDevice mUiDevice;
+    private NetworkingHelper mNetworkingHelper;
     private PowerManager mPowerManager;
     private int mTestJobId;
     private int mTestPackageUid;
     private boolean mDeviceInDoze;
     private boolean mDeviceIdleEnabled;
     private boolean mAppStandbyEnabled;
-    private WifiManager mWifiManager;
-    private ConnectivityManager mCm;
-    /** Whether the device running these tests supports WiFi. */
-    private boolean mHasWifi;
-    /** Track whether WiFi was enabled in case we turn it off. */
-    private boolean mInitialWiFiState;
-    private boolean mInitialAirplaneModeState;
     private String mInitialDisplayTimeout;
     private String mInitialRestrictedBucketEnabled;
-    private String mInitialLocationMode;
     private String mInitialBatteryStatsConstants;
     private boolean mAutomotiveDevice;
     private boolean mLeanbackOnly;
@@ -154,6 +129,8 @@ public class JobThrottlingTest {
     public void setUp() throws Exception {
         mContext = InstrumentationRegistry.getTargetContext();
         mUiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+        mNetworkingHelper =
+                new NetworkingHelper(InstrumentationRegistry.getInstrumentation(), mContext);
         mPowerManager = mContext.getSystemService(PowerManager.class);
         mDeviceInDoze = mPowerManager.isDeviceIdleMode();
         mTestPackageUid = mContext.getPackageManager().getPackageUid(TEST_APP_PACKAGE, 0);
@@ -171,11 +148,6 @@ public class JobThrottlingTest {
         } else {
             Log.w(TAG, "App standby not enabled on test device");
         }
-        mWifiManager = mContext.getSystemService(WifiManager.class);
-        mCm = mContext.getSystemService(ConnectivityManager.class);
-        mHasWifi = mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI);
-        mInitialWiFiState = mWifiManager.isWifiEnabled();
-        mInitialAirplaneModeState = isAirplaneModeOn();
         mInitialRestrictedBucketEnabled = Settings.Global.getString(mContext.getContentResolver(),
                 Settings.Global.ENABLE_RESTRICTED_BUCKET);
         mInitialBatteryStatsConstants = Settings.Global.getString(mContext.getContentResolver(),
@@ -183,8 +155,6 @@ public class JobThrottlingTest {
         // Make sure ACTION_CHARGING is sent immediately.
         Settings.Global.putString(mContext.getContentResolver(),
                 Settings.Global.BATTERY_STATS_CONSTANTS, "battery_charged_delay_ms=0");
-        mInitialLocationMode = Settings.Secure.getString(mContext.getContentResolver(),
-                Settings.Secure.LOCATION_MODE);
         // Make sure test jobs can run regardless of bucket.
         mDeviceConfigStateHelper =
                 new DeviceConfigStateHelper(DeviceConfig.NAMESPACE_JOB_SCHEDULER);
@@ -603,7 +573,7 @@ public class JobThrottlingTest {
         mDeviceConfigStateHelper.set("qc_timing_session_coalescing_duration_ms", "0");
         mDeviceConfigStateHelper.set("qc_max_session_count_restricted", "0");
 
-        setAirplaneMode(true);
+        mNetworkingHelper.setAllNetworksEnabled(false);
         setScreenState(true);
 
         setChargingState(false);
@@ -634,9 +604,9 @@ public class JobThrottlingTest {
         assumeTrue("app standby not enabled", mAppStandbyEnabled);
         assumeFalse("not testable in automotive device", mAutomotiveDevice);
         assumeFalse("not testable in leanback device", mLeanbackOnly);
-
-        assumeTrue(mHasWifi);
-        ensureSavedWifiNetwork(mWifiManager);
+        assumeFalse("not testable, since ethernet is connected", hasEthernetConnection());
+        assumeTrue(mNetworkingHelper.hasWifiFeature());
+        mNetworkingHelper.ensureSavedWifiNetwork();
 
         setRestrictedBucketEnabled(true);
 
@@ -644,7 +614,7 @@ public class JobThrottlingTest {
         mDeviceConfigStateHelper.set("qc_timing_session_coalescing_duration_ms", "0");
         mDeviceConfigStateHelper.set("qc_max_session_count_restricted", "0");
 
-        setAirplaneMode(true);
+        mNetworkingHelper.setAllNetworksEnabled(false);
         setScreenState(true);
 
         setChargingState(false);
@@ -673,9 +643,8 @@ public class JobThrottlingTest {
         assertFalse("New job started in RESTRICTED bucket", mTestAppInterface.awaitJobStart(3_000));
 
         // Add network
-        setAirplaneMode(false);
-        setWifiState(true, mCm, mWifiManager);
-        setWifiMeteredState(false);
+        mNetworkingHelper.setAllNetworksEnabled(true);
+        mNetworkingHelper.setWifiMeteredState(false);
         runJob();
         assertTrue("New job didn't start in RESTRICTED bucket",
                 mTestAppInterface.awaitJobStart(5_000));
@@ -978,8 +947,9 @@ public class JobThrottlingTest {
         assumeFalse("not testable in automotive device", mAutomotiveDevice);
         assumeFalse("not testable in leanback device", mLeanbackOnly);
 
-        assumeTrue(mHasWifi);
-        ensureSavedWifiNetwork(mWifiManager);
+        assumeTrue(BatteryUtils.hasBattery());
+        assumeTrue(mNetworkingHelper.hasWifiFeature());
+        mNetworkingHelper.ensureSavedWifiNetwork();
 
         setRestrictedBucketEnabled(true);
         setTestPackageStandbyBucket(Bucket.RESTRICTED);
@@ -989,9 +959,8 @@ public class JobThrottlingTest {
         mDeviceConfigStateHelper.set("qc_max_session_count_restricted", "0");
 
         // Satisfy all additional constraints.
-        setAirplaneMode(false);
-        setWifiState(true, mCm, mWifiManager);
-        setWifiMeteredState(false);
+        mNetworkingHelper.setAllNetworksEnabled(true);
+        mNetworkingHelper.setWifiMeteredState(false);
         setChargingState(true);
         BatteryUtils.runDumpsysBatterySetLevel(100);
         setScreenState(false);
@@ -1004,13 +973,12 @@ public class JobThrottlingTest {
         runJob();
         assertTrue("New job didn't start in RESTRICTED bucket",
                 mTestAppInterface.awaitJobStart(DEFAULT_WAIT_TIMEOUT));
-        setAirplaneMode(true);
+        mNetworkingHelper.setAllNetworksEnabled(false);
         assertTrue("New job didn't stop when connectivity dropped",
                 mTestAppInterface.awaitJobStop(DEFAULT_WAIT_TIMEOUT));
         assertEquals(JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY,
                 mTestAppInterface.getLastParams().getStopReason());
-        setAirplaneMode(false);
-        setWifiState(true, mCm, mWifiManager);
+        mNetworkingHelper.setAllNetworksEnabled(true);
 
         // Idle
         mTestAppInterface.scheduleJob(false, NETWORK_TYPE_ANY, false);
@@ -1195,23 +1163,12 @@ public class JobThrottlingTest {
                 Settings.Global.BATTERY_STATS_CONSTANTS, mInitialBatteryStatsConstants);
         removeTestAppFromTempWhitelist();
 
-        // Ensure that we leave WiFi in its previous state.
-        if (mHasWifi && mWifiManager.isWifiEnabled() != mInitialWiFiState) {
-            try {
-                setWifiState(mInitialWiFiState, mCm, mWifiManager);
-            } catch (AssertionFailedError e) {
-                // Don't fail the test just because wifi state wasn't set in tearDown.
-                Log.e(TAG, "Failed to return wifi state to " + mInitialWiFiState, e);
-            }
-        }
+        mNetworkingHelper.tearDown();
         mDeviceConfigStateHelper.restoreOriginalValues();
         mActivityManagerDeviceConfigStateHelper.restoreOriginalValues();
         Settings.Global.putString(mContext.getContentResolver(),
                 Settings.Global.ENABLE_RESTRICTED_BUCKET, mInitialRestrictedBucketEnabled);
-        if (isAirplaneModeOn() != mInitialAirplaneModeState) {
-            setAirplaneMode(mInitialAirplaneModeState);
-        }
-        setLocationMode(mInitialLocationMode);
+
         mUiDevice.executeShellCommand(
                 "cmd jobscheduler reset-execution-quota -u " + UserHandle.myUserId()
                         + " " + TEST_APP_PACKAGE);
@@ -1320,7 +1277,7 @@ public class JobThrottlingTest {
             mUiDevice.executeShellCommand("input keyevent KEYCODE_SLEEP");
         }
         // Wait a little bit to make sure the screen state has changed.
-        Thread.sleep(2_000);
+        Thread.sleep(4_000);
     }
 
     private void setChargingState(boolean isCharging) throws Exception {
@@ -1367,110 +1324,8 @@ public class JobThrottlingTest {
                 + " -u " + UserHandle.myUserId() + " " + TEST_APP_PACKAGE + " " + mTestJobId);
     }
 
-    private boolean isAirplaneModeOn() throws IOException {
-        final String output =
-                mUiDevice.executeShellCommand("cmd connectivity airplane-mode").trim();
-        return "enabled".equals(output);
-    }
-
-    private void setAirplaneMode(boolean on) throws Exception {
-        final CallbackAsserter airplaneModeBroadcastAsserter = CallbackAsserter.forBroadcast(
-                new IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED));
-        mUiDevice.executeShellCommand(
-                "cmd connectivity airplane-mode " + (on ? "enable" : "disable"));
-        airplaneModeBroadcastAsserter.assertCalled("Didn't get airplane mode changed broadcast",
-                15 /* 15 seconds */);
-        if (!on && mHasWifi) {
-            // Force wifi to connect ASAP.
-            mUiDevice.executeShellCommand("svc wifi enable");
-            waitUntil("Failed to enable Wifi", 30 /* seconds */,
-                    () -> {
-                        return mWifiManager.isWifiEnabled();
-                    });
-            //noinspection deprecation
-            SystemUtil.runWithShellPermissionIdentity(mWifiManager::reconnect,
-                    android.Manifest.permission.NETWORK_SETTINGS);
-        }
-        waitUntil("Networks didn't change to " + (!on ? "on" : "off"), 60 /* seconds */,
-                () -> {
-                    if (on) {
-                        return mCm.getActiveNetwork() == null
-                                && (!mHasWifi || !isWiFiConnected(mCm, mWifiManager));
-                    } else {
-                        return mCm.getActiveNetwork() != null;
-                    }
-                });
-        // Wait some time for the network changes to propagate. Can't use
-        // waitUntil(isAirplaneModeOn() == on) because the response quickly gives the new
-        // airplane mode status even though the network changes haven't propagated all the way to
-        // JobScheduler.
-        Thread.sleep(5000);
-    }
-
-    private static String unquoteSSID(String ssid) {
-        // SSID is returned surrounded by quotes if it can be decoded as UTF-8.
-        // Otherwise it's guaranteed not to start with a quote.
-        if (ssid.charAt(0) == '"') {
-            return ssid.substring(1, ssid.length() - 1);
-        } else {
-            return ssid;
-        }
-    }
-
-    private String getWifiSSID() throws Exception {
-        // Location needs to be enabled to get the WiFi information.
-        setLocationMode(String.valueOf(Settings.Secure.LOCATION_MODE_ON));
-        final AtomicReference<String> ssid = new AtomicReference<>();
-        SystemUtil.runWithShellPermissionIdentity(() -> {
-            ssid.set(mWifiManager.getConnectionInfo().getSSID());
-        }, Manifest.permission.ACCESS_FINE_LOCATION);
-        return unquoteSSID(ssid.get());
-    }
-
-    private void setLocationMode(String mode) throws Exception {
-        Settings.Secure.putString(mContext.getContentResolver(),
-                Settings.Secure.LOCATION_MODE, mode);
-        final LocationManager locationManager = mContext.getSystemService(LocationManager.class);
-        final boolean wantEnabled = !String.valueOf(Settings.Secure.LOCATION_MODE_OFF).equals(mode);
-        waitUntil("Location " + (wantEnabled ? "not enabled" : "still enabled"),
-                () -> wantEnabled == locationManager.isLocationEnabled());
-    }
-
-    // Returns "true", "false" or "none"
-    private String getWifiMeteredStatus(String ssid) {
-        // Interestingly giving the SSID as an argument to list wifi-networks
-        // only works iff the network in question has the "false" policy.
-        // Also unfortunately runShellCommand does not pass the command to the interpreter
-        // so it's not possible to | grep the ssid.
-        final String command = "cmd netpolicy list wifi-networks";
-        final String policyString = SystemUtil.runShellCommand(command);
-
-        final Matcher m = Pattern.compile("^" + ssid + ";(true|false|none)$",
-                Pattern.MULTILINE | Pattern.UNIX_LINES).matcher(policyString);
-        if (!m.find()) {
-            fail("Unexpected format from cmd netpolicy (when looking for " + ssid + "): "
-                    + policyString);
-        }
-        return m.group(1);
-    }
-
-    private void setWifiMeteredState(boolean metered) throws Exception {
-        if (metered) {
-            // Make sure unmetered cellular networks don't interfere.
-            setAirplaneMode(true);
-            setWifiState(true, mCm, mWifiManager);
-        }
-        final String ssid = getWifiSSID();
-        setWifiMeteredState(ssid, metered ? "true" : "false");
-    }
-
-    // metered should be "true", "false" or "none"
-    private void setWifiMeteredState(String ssid, String metered) {
-        if (metered.equals(getWifiMeteredStatus(ssid))) {
-            return;
-        }
-        SystemUtil.runShellCommand("cmd netpolicy set metered-network " + ssid + " " + metered);
-        assertEquals(getWifiMeteredStatus(ssid), metered);
+    private boolean hasEthernetConnection() {
+        return mNetworkingHelper.hasEthernetConnection();
     }
 
     private String getJobState() throws Exception {

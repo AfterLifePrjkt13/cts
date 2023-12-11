@@ -17,6 +17,7 @@
 package android.appenumeration.cts;
 
 import static android.Manifest.permission.SET_PREFERRED_APPLICATIONS;
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.appenumeration.cts.Constants.ACTION_AWAIT_LAUNCHER_APPS_CALLBACK;
 import static android.appenumeration.cts.Constants.ACTION_AWAIT_LAUNCHER_APPS_SESSION_CALLBACK;
 import static android.appenumeration.cts.Constants.ACTION_BIND_SERVICE;
@@ -163,6 +164,7 @@ import static org.junit.Assume.assumeTrue;
 import android.Manifest;
 import android.accounts.Account;
 import android.accounts.AccountManager;
+import android.app.ActivityOptions;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetProviderInfo;
 import android.content.ComponentName;
@@ -1084,6 +1086,8 @@ public class AppEnumerationTests {
 
     @Test
     public void launcherAppsCallback_unsuspended_visibleReceives() throws Exception {
+        setPackagesSuspended(/* suspend */ true, Arrays.asList(TARGET_NO_API, TARGET_FILTERS));
+
         final Result result = sendCommandAndWaitForLauncherAppsCallback(QUERIES_ACTIVITY_ACTION,
                 CALLBACK_EVENT_PACKAGES_UNSUSPENDED);
 
@@ -2530,7 +2534,10 @@ public class AppEnumerationTests {
             AmUtils.waitForBroadcastIdle();
             startAndWaitForCommandReady(intent);
         } else {
-            InstrumentationRegistry.getInstrumentation().getContext().startActivity(intent);
+            final ActivityOptions options = ActivityOptions.makeBasic();
+            options.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+            InstrumentationRegistry.getInstrumentation().getContext().startActivity(
+                    intent, options.toBundle());
         }
         return () -> {
             if (!latch.block(TimeUnit.SECONDS.toMillis(10))) {

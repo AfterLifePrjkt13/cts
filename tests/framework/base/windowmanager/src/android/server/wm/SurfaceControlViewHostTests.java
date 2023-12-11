@@ -16,6 +16,7 @@
 
 package android.server.wm;
 
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
 import static android.server.wm.MockImeHelper.createManagedMockImeSession;
 import static android.view.SurfaceControlViewHost.SurfacePackage;
 import static android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
@@ -32,6 +33,7 @@ import static org.junit.Assume.assumeTrue;
 
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.ActivityOptions;
 import android.app.Instrumentation;
 import android.app.UiAutomation;
 import android.content.ComponentName;
@@ -66,6 +68,7 @@ import android.widget.FrameLayout;
 import android.widget.PopupWindow;
 
 import androidx.test.InstrumentationRegistry;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.filters.FlakyTest;
 import androidx.test.rule.ActivityTestRule;
 
@@ -95,6 +98,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SurfaceControlViewHostTests extends ActivityManagerTestBase implements SurfaceHolder.Callback {
     private final ActivityTestRule<ConfigChangeHandlingActivity> mActivityRule =
         new ActivityTestRule<>(ConfigChangeHandlingActivity.class);
+
+    private ActivityScenario<ConfigChangeHandlingActivity> mScenario;
 
     private Instrumentation mInstrumentation;
     private Activity mActivity;
@@ -919,6 +924,19 @@ public class SurfaceControlViewHostTests extends ActivityManagerTestBase impleme
 
     @Test
     public void testEmbeddedViewReceivesInputOnBottom() throws Throwable {
+        // Close the activity that was launched by setup
+        mActivityRule.finishActivity();
+
+        // Launch activity in fullscreen windowing mode
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.setClass(mInstrumentation.getTargetContext(), ConfigChangeHandlingActivity.class);
+        final ActivityOptions options = ActivityOptions.makeBasic();
+        options.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+        mScenario = ActivityScenario.launch(intent, options.toBundle());
+        mScenario.onActivity(activity -> {
+            mActivity = activity;
+        });
+
         mEmbeddedView = new Button(mActivity);
         mEmbeddedView.setOnClickListener((View v) -> {
             mClicked = true;
@@ -929,7 +947,7 @@ public class SurfaceControlViewHostTests extends ActivityManagerTestBase impleme
         waitUntilEmbeddedViewDrawn();
 
         // We should receive no input until we punch a hole
-        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, mActivityRule, mSurfaceView);
+        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, null, mSurfaceView);
         mInstrumentation.waitForIdleSync();
         assertFalse(mClicked);
 
@@ -949,7 +967,7 @@ public class SurfaceControlViewHostTests extends ActivityManagerTestBase impleme
         // operations
         waitForTouchableRegionChanged(originalRegion);
 
-        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, mActivityRule, mSurfaceView);
+        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, null, mSurfaceView);
         mInstrumentation.waitForIdleSync();
         assertTrue(mClicked);
     }
@@ -977,6 +995,19 @@ public class SurfaceControlViewHostTests extends ActivityManagerTestBase impleme
 
     @Test
     public void testHostInputTokenAllowsObscuredTouches() throws Throwable {
+        // Close the activity that was launched by setup
+        mActivityRule.finishActivity();
+
+        // Launch activity in fullscreen windowing mode
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.setClass(mInstrumentation.getTargetContext(), ConfigChangeHandlingActivity.class);
+        final ActivityOptions options = ActivityOptions.makeBasic();
+        options.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+        mScenario = ActivityScenario.launch(intent, options.toBundle());
+        mScenario.onActivity(activity -> {
+            mActivity = activity;
+        });
+
         SurfaceControlViewHost.SurfacePackage p = null;
 
         mTestService = getService();
@@ -987,7 +1018,7 @@ public class SurfaceControlViewHostTests extends ActivityManagerTestBase impleme
             mSurfaceView.getRootSurfaceControl().setTouchableRegion(new Region());
         });
         mInstrumentation.waitForIdleSync();
-        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, mActivityRule, mSurfaceView);
+        CtsTouchUtils.emulateTapOnViewCenter(mInstrumentation, null, mSurfaceView);
         mInstrumentation.waitForIdleSync();
 
         assertTrue(mTestService.getViewIsTouchedAndObscured());

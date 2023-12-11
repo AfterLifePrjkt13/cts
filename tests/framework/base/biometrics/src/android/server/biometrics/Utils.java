@@ -19,7 +19,6 @@ package android.server.biometrics;
 import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentation;
 
 import android.content.ComponentName;
-import android.content.Context;
 import android.hardware.biometrics.BiometricManager;
 import android.hardware.biometrics.BiometricPrompt;
 import android.hardware.biometrics.SensorProperties;
@@ -38,6 +37,7 @@ import com.android.server.biometrics.nano.BiometricServiceStateProto;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -51,6 +51,7 @@ public class Utils {
 
     private static final String TAG = "BiometricTestUtils";
     private static final String KEYSTORE_PROVIDER = "AndroidKeyStore";
+    private static final String AIDL_HAL_PATTERN = ", provider: FingerprintProvider";
 
     /** adb command for dumping the biometric proto */
     public static final String DUMPSYS_BIOMETRIC = "dumpsys biometric --proto";
@@ -276,15 +277,19 @@ public class Utils {
     }
 
     /**
-     * Retrieves HIDL biometric sensor configuration defined in config_biometric_sensors.
+     * Retrieves AIDL HAL belonging sensor id
      *
-     * @param context The system context.
-     * @return List of biometric sensors on the device, in decreasing strength, otherwise null.
+     * @return sensorId if there is AIDL HAL, -1 otherwise
      */
-    @Nullable
-    public static String[] getSensorConfiguration(Context context) {
-        final int sensorConfigId = context.getResources().getSystem().getIdentifier(
-                "config_biometric_sensors", "array", "android");
-        return context.getResources().getSystem().getStringArray(sensorConfigId);
+    public static int getAidlSensorId() {
+        final byte[] dump = executeShellCommand("dumpsys fingerprint");
+        final String fpsDumpSys = new String(dump, StandardCharsets.UTF_8);
+        final int indexOfAidlProvider = fpsDumpSys.indexOf(AIDL_HAL_PATTERN);
+
+        if (indexOfAidlProvider > 0) {
+            return Integer.parseInt(
+                    fpsDumpSys.substring(indexOfAidlProvider - 1, indexOfAidlProvider));
+        }
+        return indexOfAidlProvider /* -1 No AIDL HAL */;
     }
 }

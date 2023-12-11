@@ -48,7 +48,6 @@ import com.android.compatibility.common.util.PollingCheck;
 import com.android.compatibility.common.util.SystemUtil;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -88,6 +87,8 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
     // ActivityManager.getRunningAppProcess called in isAppRunning needs this permission
     private static final String PERMISSION_INTERACT_ACROSS_USERS_FULL =
             "android.permission.INTERACT_ACROSS_USERS_FULL";
+    private static final String PERMISSION_REAL_GET_TASKS =
+            "android.permission.REAL_GET_TASKS";
 
     private static final String SIMPLE_APP_PACKAGE_NAME = "android.car.cts.builtin.apps.simple";
     private static final String SIMPLE_ACTIVITY_RELATIVE_NAME = ".SimpleActivity";
@@ -183,8 +184,7 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
         ComponentName activityName = task1TopActivity.getComponentName();
         waitAndAssertTopResumedActivity(activityName, DEFAULT_DISPLAY,
                 "Activity must be resumed");
-        assertWithMessage("task1 top activity has focus")
-                .that(task1TopActivity.hasFocus()).isTrue();
+        waitAndAssertFocusStatusChanged(task1TopActivity, true);
         assertWithMessage("task1 top activity is visible")
                 .that(task1TopActivity.isVisible()).isTrue();
 
@@ -269,7 +269,6 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
                 .isEqualTo(expectedLaunchAllowed);
     }
 
-    @Ignore("b/232432706")
     @Test
     public void testStopAllTasksForUser() throws Exception {
         int initialCurrentUserId = getCurrentUserId();
@@ -279,6 +278,7 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
             mInstrumentation.getUiAutomation().adoptShellPermissionIdentity(
                     PERMISSION_MANAGE_ACTIVITY_TASKS,
                     PERMISSION_REMOVE_TASKS,
+                    PERMISSION_REAL_GET_TASKS,
                     PERMISSION_INTERACT_ACROSS_USERS_FULL);
 
             testUserId = createUser(CTS_CAR_TEST_USER_NAME);
@@ -290,15 +290,13 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
             installPackageForUser(testUserId);
 
             launchSimpleActivityInCurrentUser();
-            waitUntilSimpleActivityExistenceStatusIs(true);
-            assertThat(isAppRunning(SIMPLE_APP_PACKAGE_NAME)).isTrue();
+            assertIsAppRunning(true, SIMPLE_APP_PACKAGE_NAME);
 
             switchUser(initialCurrentUserId);
             waitUntilUserCurrent(initialCurrentUserId);
 
             stopAllTasksForUser(testUserId);
-            waitUntilSimpleActivityExistenceStatusIs(false);
-            assertThat(isAppRunning(SIMPLE_APP_PACKAGE_NAME)).isFalse();
+            assertIsAppRunning(false, SIMPLE_APP_PACKAGE_NAME);
 
             removeUser(testUserId);
             testUserId = INVALID_USER_ID;
@@ -377,14 +375,17 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
         Log.d(TAG, "installPackageForUser return: " + retStr);
     }
 
+    private void assertIsAppRunning(boolean isRunning, String pkgName) {
+        PollingCheck.waitFor(TIMEOUT_MS, () -> isAppRunning(pkgName) == isRunning);
+    }
+
     private boolean isAppRunning(String pkgName) {
         ActivityManager am = mContext.getSystemService(ActivityManager.class);
 
-        List<ActivityManager.RunningAppProcessInfo> runningAppProcesses =
-                am.getRunningAppProcesses();
+        List<ActivityManager.RunningTaskInfo> runningTasks = am.getRunningTasks(MAX_NUM_TASKS);
 
-        for (ActivityManager.RunningAppProcessInfo procInfo : runningAppProcesses) {
-            if (pkgName.equals(procInfo.processName)) {
+        for (ActivityManager.RunningTaskInfo taskInfo : runningTasks) {
+            if (pkgName.equals(taskInfo.baseActivity.getPackageName())) {
                 return true;
             }
         }
@@ -444,6 +445,11 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
     public static final class ActivityC extends ActivityManagerTestActivityBase {
     }
 
+    private static void waitAndAssertFocusStatusChanged(ActivityManagerTestActivityBase activity,
+            boolean expectedStatus) throws Exception {
+        PollingCheck.waitFor(TIMEOUT_MS, () -> activity.hasFocus() == expectedStatus);
+    }
+
     private static int createUser(String userName) throws Exception {
         Log.d(TAG, "createUser: " + userName);
         String retStr = SystemUtil.runShellCommand(CREATE_USER_COMMAND + userName);
@@ -494,11 +500,6 @@ public final class ActivityManagerHelperTest extends ActivityManagerTestBase {
     // need to get the permission in the same user
     private static void stopAllTasksForUser(int userId) {
         ActivityManagerHelper.stopAllTasksForUser(userId);
-    }
-
-    private static void waitUntilSimpleActivityExistenceStatusIs(boolean expectedStatus) {
-        PollingCheck.waitFor(TIMEOUT_MS,
-                () -> (checkSimpleActivityExistence() == expectedStatus));
     }
 
     private static boolean checkSimpleActivityExistence() {

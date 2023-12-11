@@ -21,13 +21,11 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.util.Log;
 import android.voiceinteraction.common.Utils;
-import android.voiceinteraction.service.BasicVoiceInteractionService;
-import android.voiceinteraction.service.MainInteractionService;
 
 public class TestVoiceInteractionServiceActivity extends Activity {
     static final String TAG = "TestVoiceInteractionServiceActivity";
 
-    void triggerHotwordDetectionServiceTest(int serviceType, int testEvent) {
+    public void triggerHotwordDetectionServiceTest(int serviceType, int testEvent) {
         Intent serviceIntent = new Intent();
         if (serviceType == Utils.HOTWORD_DETECTION_SERVICE_NONE) {
             serviceIntent.setComponent(new ComponentName(this,

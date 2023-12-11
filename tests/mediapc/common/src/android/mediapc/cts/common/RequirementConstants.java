@@ -16,8 +16,6 @@
 
 package android.mediapc.cts.common;
 
-import android.os.Build;
-
 import java.util.function.BiPredicate;
 
 public class RequirementConstants {
@@ -52,10 +50,18 @@ public class RequirementConstants {
     public static final String R7_5__H_1_2 = "r7_5__h_1_2"; // 7.5/H-1-2
     public static final String R7_5__H_1_3 = "r7_5__h_1_3"; // 7.5/H-1-3
     public static final String R7_5__H_1_4 = "r7_5__h_1_4"; // 7.5/H-1-4
-    public static final String R7_5__H_1_5 = "r7_5__h_1_5"; // 7.5/H-1-5
-    public static final String R7_5__H_1_6 = "r7_5__h_1_6"; // 7.5/H-1-6
-    public static final String R7_5__H_1_7 = "r7_5__h_1_7"; // 7.5/H-1-7
+
+    // these includes "its" because the proto in google3 was originally implemented incorrectly
+    public static final String R7_5__H_1_5 = "r7_5__h_1_5__its"; // 7.5/H-1-5
+    public static final String R7_5__H_1_6 = "r7_5__h_1_6__its"; // 7.5/H-1-6
+
     public static final String R7_5__H_1_8 = "r7_5__h_1_8"; // 7.5/H-1-8
+    public static final String R7_5__H_1_9 = "r7_5__h_1_9"; // 7.5/H-1-9
+    public static final String R7_5__H_1_10 = "r7_5__h_1_10"; // 7.5/H-1-10
+    public static final String R7_5__H_1_11 = "r7_5__h_1_11"; // 7.5/H-1-11
+    public static final String R7_5__H_1_12 = "r7_5__h_1_12"; // 7.5/H-1-12
+    public static final String R7_5__H_1_13 = "r7_5__h_1_13"; // 7.5/H-1-13
+    public static final String R7_5__H_1_14 = "r7_5__h_1_14"; // 7.5/H-1-14
     public static final String R7_1_1_1__H_1_1 = "r7_1_1_1__h_1_1"; // 7.1.1.1/H-1-1
     public static final String R7_1_1_3__H_1_1 = "r7_1_1_3__h_1_1"; // 7.1.1.3/H-1-1
     public static final String R7_6_1__H_1_1 = "r7_6_1__h_1_1"; // 7.6.1/H-1-1
@@ -74,6 +80,7 @@ public class RequirementConstants {
     public static final String RTBD = "tbd"; // placeholder for requirements without a set id
 
     public static final String CONCURRENT_SESSIONS = "concurrent_sessions";
+    public static final String TEST_RESOLUTION = "resolution";
     public static final String CONCURRENT_FPS = "concurrent_fps";
     public static final String SUPPORTED_PERFORMANCE_POINTS = "supported_performance_points";
     public static final String FRAMES_DROPPED = "frame_drops_per_30sec";
@@ -89,6 +96,43 @@ public class RequirementConstants {
     public static final String SECURE_REQ_SATISFIED = "secure_requirement_satisfied_boolean";
     public static final String NUM_CRYPTO_HW_SECURE_ALL_SUPPORT =
         "number_crypto_hw_secure_all_support";
+    public static final String FILESYSTEM_IO_RATE = "filesystem_io_rate_mbps";
+
+    public static final String PRIMARY_CAMERA_AVAILABLE = "primary_camera_available";
+    public static final String PRIMARY_CAMERA_RESOLUTION = "primary_camera_resolution";
+    public static final String PRIMARY_CAMERA_VIDEO_SIZE_REQ_SATISFIED =
+            "primary_camera_video_size_req_satisfied";
+    public static final String PRIMARY_CAMERA_VIDEO_FPS =
+            "primary_camera_video_fps";
+    public static final String REAR_CAMERA_HWL_LEVEL = "rear_primary_camera_hwl_level";
+    public static final String FRONT_CAMERA_HWL_LEVEL = "front_primary_camera_hwl_level";
+    public static final String REAR_CAMERA_TIMESTAMP_SOURCE =
+            "rear_primary_camera_timestamp_source";
+    public static final String FRONT_CAMERA_TIMESTAMP_SOURCE =
+            "front_primary_camera_timestamp_source";
+    public static final String REAR_CAMERA_LATENCY = "rear_camera_latency";
+    public static final String FRONT_CAMERA_LATENCY = "front_camera_latency";
+    public static final String REAR_CAMERA_RAW_SUPPORTED = "rear_camera_raw_supported";
+    public static final String REAR_CAMERA_240FPS_SUPPORTED = "rear_camera_240fps_supported";
+    public static final String REAR_CAMERA_ULTRAWIDE_ZOOMRATIO_REQ_MET =
+            "rear_camera_ultrawide_zoom_req_met";
+    public static final String FRONT_CAMERA_ULTRAWIDE_ZOOMRATIO_REQ_MET =
+            "front_camera_ultrawide_zoom_req_met";
+    public static final String CONCURRENT_REAR_FRONT_SUPPORTED = "rear_front_concurrent_camera";
+    public static final String REAR_CAMERA_PREVIEW_STABILIZATION_SUPPORTED =
+            "rear_camera_preview_stabilization_supported";
+    public static final String FRONT_CAMERA_PREVIEW_STABILIZATION_SUPPORTED =
+            "front_camera_preview_stabilization_supported";
+    public static final String REAR_CAMERA_LOGICAL_MULTI_CAMERA_REQ_MET =
+            "rear_camera_logical_multi_camera_req_met";
+    public static final String FRONT_CAMERA_LOGICAL_MULTI_CAMERA_REQ_MET =
+            "front_camera_logical_multi_camera_req_met";
+    public static final String REAR_CAMERA_STREAM_USECASE_SUPPORTED =
+            "rear_camera_stream_usecase_supported";
+    public static final String FRONT_CAMERA_STREAM_USECASE_SUPPORTED =
+            "front_camera_stream_usecase_supported";
+    public static final String API_NATIVE_LATENCY = "native_latency_ms";
+    public static final String API_JAVA_LATENCY = "java_latency_ms";
 
     public enum Result {
         NA, MET, UNMET
@@ -96,11 +140,14 @@ public class RequirementConstants {
 
     public static final BiPredicate<Long, Long> LONG_GTE = RequirementConstants.gte();
     public static final BiPredicate<Long, Long> LONG_LTE = RequirementConstants.lte();
+    public static final BiPredicate<Float, Float> FLOAT_LTE = RequirementConstants.lte();
     public static final BiPredicate<Integer, Integer> INTEGER_GTE = RequirementConstants.gte();
     public static final BiPredicate<Integer, Integer> INTEGER_LTE = RequirementConstants.lte();
+    public static final BiPredicate<Integer, Integer> INTEGER_EQ = RequirementConstants.eq();
+    public static final BiPredicate<Double, Double> DOUBLE_GTE = RequirementConstants.gte();
+    public static final BiPredicate<Double, Double> DOUBLE_LTE = RequirementConstants.lte();
     public static final BiPredicate<Double, Double> DOUBLE_EQ = RequirementConstants.eq();
     public static final BiPredicate<Boolean, Boolean> BOOLEAN_EQ = RequirementConstants.eq();
-    public static final BiPredicate<Double, Double> DOUBLE_GTE = RequirementConstants.gte();
 
     /**
      * Creates a >= predicate.

@@ -24,10 +24,13 @@ import static org.junit.Assume.assumeTrue;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.app.Instrumentation.ActivityMonitor;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.provider.Settings;
+import android.util.FeatureFlagUtils;
+import android.util.Log;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
@@ -46,13 +49,22 @@ public class SettingsMultiPaneDeepLinkTest {
 
     private static final String DEEP_LINK_PERMISSION =
             "android.permission.LAUNCH_MULTI_PANE_SETTINGS_DEEP_LINK";
+    private  static final String TAG = "SettingsMultiPaneDeepLinkTest";
 
     boolean mIsSplitSupported;
     ResolveInfo mDeepLinkIntentResolveInfo;
 
     @Before
     public void setUp() throws Exception {
-        mIsSplitSupported = SplitController.getInstance().isSplitSupported();
+        Context targetContext = InstrumentationRegistry.getInstrumentation()
+                .getTargetContext();
+        boolean isFlagEnabled =
+                FeatureFlagUtils.isEnabled(targetContext, "settings_support_large_screen");
+        boolean isSplitSupported = SplitController.getInstance(targetContext).isSplitSupported();
+        mIsSplitSupported = isFlagEnabled && isSplitSupported;
+        Log.d(TAG, "isFlagEnabled : " + isFlagEnabled);
+        Log.d(TAG, "isSplitSupported : " + isSplitSupported);
+        Log.d(TAG, "mIsSplitSupported : " + mIsSplitSupported);
         mDeepLinkIntentResolveInfo = InstrumentationRegistry.getInstrumentation().getContext()
                 .getPackageManager().resolveActivity(
                 new Intent(Settings.ACTION_SETTINGS_EMBED_DEEP_LINK_ACTIVITY),
@@ -67,6 +79,12 @@ public class SettingsMultiPaneDeepLinkTest {
                         && InstrumentationRegistry.getInstrumentation().getContext()
                                 .getPackageManager()
                                 .hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE));
+
+        assumeFalse("Skipping test: not supported on television yet",
+                mDeepLinkIntentResolveInfo == null
+                        && InstrumentationRegistry.getInstrumentation().getContext()
+                                .getPackageManager()
+                                .hasSystemFeature(PackageManager.FEATURE_LEANBACK));
     }
 
     @Test

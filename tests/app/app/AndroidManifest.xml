@@ -66,6 +66,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
 
     <application android:label="Android TestCase"
          android:icon="@drawable/size_48x48"
@@ -328,6 +329,7 @@
         </activity>
 
         <activity android:name="android.app.stubs.DialogStubActivity"
+             android:theme="@style/Theme_NoSwipeDismiss"
              android:label="DialogStubActivity"
              android:exported="true">
             <intent-filter>
@@ -357,6 +359,7 @@
 
         <activity android:name="android.app.stubs.ActivityManagerRecentTwoActivity"
              android:label="ActivityManagerRecentTwoActivity"
+             android:theme="@style/Theme_NoSwipeDismiss"
              android:allowTaskReparenting="true"
              android:taskAffinity="android.app.stubs.recentTwo"
              android:exported="true">
@@ -533,6 +536,7 @@
         <service android:name="android.app.stubs.LocalAlertService"/>
 
         <activity android:name=".SimpleActivity"
+             android:theme="@style/Theme_NoSwipeDismiss"
              android:excludeFromRecents="true"
              android:exported="true">
             <intent-filter>
@@ -588,6 +592,10 @@
             </intent-filter>
         </receiver>
 
+        <activity android:name="android.app.stubs.RemoteActivity"
+            android:process=":remote"
+            android:excludeFromRecents="true"
+            android:exported="true" />
     </application>
 
 </manifest>

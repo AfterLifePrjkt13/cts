@@ -67,7 +67,12 @@
             android:label="RemoteCamera2Activity"
             android:screenOrientation="locked"
             android:configChanges="keyboardHidden|orientation|screenSize|screenLayout"
-            android:process=":camera2ActivityProcess">
+            android:process=":camera2ActivityProcess"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:keepScreenOn="true"
+            android:exported="true"
+            android:taskAffinity=".Camera2Activity">
         </activity>
 
         <activity android:name="android.hardware.camera2.cts.Camera2OfflineTestActivity"

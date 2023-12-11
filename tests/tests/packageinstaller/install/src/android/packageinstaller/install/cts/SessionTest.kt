@@ -24,13 +24,12 @@ import android.platform.test.annotations.AppModeFull
 import androidx.test.InstrumentationRegistry
 import androidx.test.runner.AndroidJUnit4
 import com.android.compatibility.common.util.AppOpsUtils
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.util.concurrent.TimeUnit
 
 private const val INSTALL_BUTTON_ID = "button1"
 private const val CANCEL_BUTTON_ID = "button2"
@@ -40,9 +39,6 @@ private const val CANCEL_BUTTON_ID = "button2"
 class SessionTest : PackageInstallerTestBase() {
     private val context = InstrumentationRegistry.getTargetContext()
     private val pm = context.packageManager
-
-    @get:Rule
-    val excludeWatch = ExcludeWatch("Installing APKs not supported on watch", pm)
 
     /**
      * Check that we can install an app via a package-installer session

@@ -16,13 +16,14 @@
 
 package android.car.cts;
 
+import static android.car.PlatformVersion.VERSION_CODES;
+
 import static com.android.compatibility.common.util.ShellUtils.runShellCommand;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
-import static org.junit.Assume.assumeTrue;
-
+import android.car.Car;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Process;
@@ -45,7 +46,6 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
-import java.lang.Math;
 import java.nio.file.Files;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -165,6 +165,8 @@ public final class CarWatchdogDaemonTest {
      * @return Total written bytes recorded for the current userId and package name.
      */
     private static long parseDump(String content, int userId, String packageName) throws Exception {
+        String ioWritesHeader = Car.getPlatformVersion().isAtLeast(VERSION_CODES.TIRAMISU_1)
+                ? "Top N Storage I/O Writes:" : "Top N Writes:";
         long writtenBytes = 0;
         Section curSection = Section.NONE;
         String errorLines = "";
@@ -180,7 +182,7 @@ public final class CarWatchdogDaemonTest {
             if (line.contains("collector failed to access")) {
                 errorLines += "\n" + line;
             }
-            if (line.matches("Top N Writes:")) {
+            if (line.matches(ioWritesHeader)) {
                 curSection = Section.WRITTEN_BYTES_HEADER_SECTION;
                 continue;
             }

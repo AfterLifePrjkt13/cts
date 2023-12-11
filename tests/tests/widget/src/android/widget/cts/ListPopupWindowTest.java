@@ -16,6 +16,8 @@
 
 package android.widget.cts;
 
+import static android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -34,8 +36,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import android.app.Activity;
+import android.app.ActivityOptions;
 import android.app.Instrumentation;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -56,6 +60,7 @@ import android.widget.PopupWindow;
 import android.widget.TextView;
 
 import androidx.test.InstrumentationRegistry;
+import androidx.test.core.app.ActivityScenario;
 import androidx.test.filters.LargeTest;
 import androidx.test.rule.ActivityTestRule;
 import androidx.test.runner.AndroidJUnit4;
@@ -89,6 +94,8 @@ public class ListPopupWindowTest {
 
     private AdapterView.OnItemClickListener mItemClickListener;
 
+    private ActivityScenario<ListPopupWindowCtsActivity> mScenario;
+
     /**
      * Item click listener that dismisses our <code>ListPopupWindow</code> when any item
      * is clicked. Note that this needs to be a separate class that is also protected (not
@@ -112,6 +119,8 @@ public class ListPopupWindowTest {
         mActivity = mActivityRule.getActivity();
         mItemClickListener = new PopupItemClickListener();
         mActivity.getApplicationInfo().setEnableOnBackInvokedCallback(false);
+
+        PollingCheck.waitFor(() -> mActivity.hasWindowFocus());
     }
 
     @After
@@ -498,7 +507,7 @@ public class ListPopupWindowTest {
         final ListView popupListView = mPopupWindow.getListView();
         final Rect rect = new Rect();
         mPopupWindow.getBackground().getPadding(rect);
-        CtsTouchUtils.emulateTapOnView(instrumentation, mActivityRule, popupListView,
+        CtsTouchUtils.emulateTapOnView(instrumentation, null, popupListView,
                 -rect.left - 20, popupListView.getHeight() / 2);
 
         // At this point our popup should not be showing and should have notified its
@@ -513,6 +522,21 @@ public class ListPopupWindowTest {
 
     @Test
     public void testDismissalOutsideNonModal() {
+        // Close the activity that was launched by setup
+        mActivityRule.finishActivity();
+
+        // Launch activity in fullscreen windowing mode
+        Intent intent = new Intent(Intent.ACTION_MAIN);
+        intent.setClass(mInstrumentation.getTargetContext(), ListPopupWindowCtsActivity.class);
+        final ActivityOptions options = ActivityOptions.makeBasic();
+        options.setLaunchWindowingMode(WINDOWING_MODE_FULLSCREEN);
+
+        mScenario = ActivityScenario.launch(intent, options.toBundle());
+        mScenario.onActivity(activity -> {
+            mActivity = activity;
+            mActivity.getApplicationInfo().setEnableOnBackInvokedCallback(false);
+        });
+
         verifyDismissalViaTouch(false);
     }
 

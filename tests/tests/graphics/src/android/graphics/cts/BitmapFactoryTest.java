@@ -41,6 +41,7 @@ import android.media.MediaFormat;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemProperties;
 import android.platform.test.annotations.LargeTest;
 import android.platform.test.annotations.RequiresDevice;
 import android.system.ErrnoException;
@@ -1009,18 +1010,31 @@ public class BitmapFactoryTest {
 
     @Test
     @RequiresDevice
-    public void testDecode10BitHEIFTo10BitBitmap() {
+    public void testDecode10BitHEIF() {
         assumeTrue(
             "Test needs Android T.", ApiLevelUtil.isFirstApiAtLeast(Build.VERSION_CODES.TIRAMISU));
+        assumeTrue(
+            "Test needs VNDK at least T.",
+            SystemProperties.getInt("ro.vndk.version", 0) >= Build.VERSION_CODES.TIRAMISU);
         assumeTrue("No 10-bit HEVC decoder, skip the test.", has10BitHEVCDecoder());
 
+        Config preferredConfig = Config.RGBA_1010102;
+
+        // For TVs, even if the device advertises that 10 bits profile is supported, the output
+        // format might not be CPU readable, but can still be displayed. When the TV device is
+        // not capable to decode to YUVP010 format, it should be able to fall back to decode to
+        // RGB_565 format.
+        if (MediaUtils.isTv() && !hasHEVCDecoderSupportsYUVP010()) {
+            preferredConfig = Config.RGB_565;
+        }
+
         BitmapFactory.Options opt = new BitmapFactory.Options();
-        opt.inPreferredConfig = Config.RGBA_1010102;
+        opt.inPreferredConfig = preferredConfig;
         Bitmap bm = BitmapFactory.decodeStream(obtainInputStream(R.raw.heifimage_10bit), null, opt);
         assertNotNull(bm);
         assertEquals(4096, bm.getWidth());
         assertEquals(3072, bm.getHeight());
-        assertEquals(Config.RGBA_1010102, bm.getConfig());
+        assertEquals(preferredConfig, bm.getConfig());
     }
 
     @Test
@@ -1028,7 +1042,20 @@ public class BitmapFactoryTest {
     public void testDecode10BitHEIFTo8BitBitmap() {
         assumeTrue(
             "Test needs Android T.", ApiLevelUtil.isFirstApiAtLeast(Build.VERSION_CODES.TIRAMISU));
+        assumeTrue(
+            "Test needs VNDK at least T.",
+            SystemProperties.getInt("ro.vndk.version", 0) >= Build.VERSION_CODES.TIRAMISU);
         assumeTrue("No 10-bit HEVC decoder, skip the test.", has10BitHEVCDecoder());
+
+        // For TVs, even if the device advertises that 10 bits profile is supported, the output
+        // format might not be CPU readable, but can still be displayed, and only when the TV
+        // is capable to decode to YUVP010 format, the image can be converted into RGBA_1010102,
+        // and this test can continue.
+        if (MediaUtils.isTv()) {
+            assumeTrue(
+                "The TV is unable to decode to RGBA_1010102 format, skip the test",
+                hasHEVCDecoderSupportsYUVP010());
+        }
 
         BitmapFactory.Options opt = new BitmapFactory.Options();
         opt.inPreferredConfig = Config.ARGB_8888;
@@ -1105,5 +1132,27 @@ public class BitmapFactoryTest {
             return false;
         }
         return true;
+    }
+
+    private static boolean hasHEVCDecoderSupportsYUVP010() {
+        MediaCodecList codecList = new MediaCodecList(MediaCodecList.ALL_CODECS);
+        for (MediaCodecInfo mediaCodecInfo : codecList.getCodecInfos()) {
+            if (mediaCodecInfo.isEncoder()) {
+                continue;
+            }
+            for (String mediaType : mediaCodecInfo.getSupportedTypes()) {
+                if (mediaType.equalsIgnoreCase("video/hevc")) {
+                    MediaCodecInfo.CodecCapabilities codecCapabilities =
+                            mediaCodecInfo.getCapabilitiesForType(mediaType);
+                    for (int i = 0; i < codecCapabilities.colorFormats.length; ++i) {
+                        if (codecCapabilities.colorFormats[i]
+                                == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUVP010) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

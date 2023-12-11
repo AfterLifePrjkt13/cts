@@ -36,6 +36,7 @@ import android.hardware.camera2.params.SessionConfiguration;
 import android.hardware.camera2.TotalCaptureResult;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.test.AndroidTestCase;
@@ -124,9 +125,8 @@ public class SPerfClassTest extends AndroidTestCase {
         for (Size jpegSize : jpegSizes) {
             mCollector.expectTrue(
                     "Primary camera's JPEG size must be at least 1080p, but is " +
-                    jpegSize,
-                    jpegSize.getWidth() >= FULLHD.getWidth() &&
-                    jpegSize.getHeight() >= FULLHD.getHeight());
+                    jpegSize, jpegSize.getWidth() * jpegSize.getHeight()
+                            >= FULLHD.getWidth() * FULLHD.getHeight());
         }
 
         CameraDevice camera = null;
@@ -210,8 +210,9 @@ public class SPerfClassTest extends AndroidTestCase {
      * Version.MEDIA_PERFORMANCE_CLASS
      */
     public void testSPerfClassJpegSizes() throws Exception {
-        boolean isSPerfClass = CameraTestUtils.isSPerfClass();
-        if (!isSPerfClass) {
+        final boolean isAtLeastSPerfClass =
+                (Build.VERSION.MEDIA_PERFORMANCE_CLASS >= Build.VERSION_CODES.S);
+        if (!isAtLeastSPerfClass) {
             return;
         }
 

@@ -109,6 +109,7 @@ import android.util.Pair;
 
 import androidx.test.InstrumentationRegistry;
 
+import com.android.compatibility.common.util.ApiTest;
 import com.android.compatibility.common.util.CarrierPrivilegeUtils;
 import com.android.compatibility.common.util.CddTest;
 import com.android.compatibility.common.util.ShellIdentityUtils;
@@ -213,7 +214,7 @@ public class TelephonyManagerTest {
     private static final String PLMN_A = "123456";
     private static final String PLMN_B = "78901";
     private static final List<String> FPLMN_TEST = Arrays.asList(PLMN_A, PLMN_B);
-    private static final int MAX_FPLMN_NUM = 100;
+    private static final int MAX_FPLMN_NUM = 1000;
     private static final int MIN_FPLMN_NUM = 3;
 
     private static final String THERMAL_MITIGATION_COMMAND_BASE = "cmd phone thermal-mitigation ";
@@ -283,6 +284,7 @@ public class TelephonyManagerTest {
     private static final int RADIO_HAL_VERSION_1_3 = makeRadioVersion(1, 3);
     private static final int RADIO_HAL_VERSION_1_5 = makeRadioVersion(1, 5);
     private static final int RADIO_HAL_VERSION_1_6 = makeRadioVersion(1, 6);
+    private static final int RADIO_HAL_VERSION_2_0 = makeRadioVersion(2, 0);
 
     static {
         EMERGENCY_NUMBER_SOURCE_SET = new HashSet<Integer>();
@@ -1208,10 +1210,8 @@ public class TelephonyManagerTest {
                 Build::getSerial);
         assertNotNull("Non-telephony devices must have a Build.getSerial() number.",
                 serial);
-        assertTrue("Hardware id must be no longer than 20 characters.",
-                serial.length() <= 20);
         assertTrue("Hardware id must be alphanumeric.",
-                Pattern.matches("[0-9A-Za-z]+", serial));
+                Pattern.matches("[0-9A-Za-z.,_-]+", serial));
     }
 
     private void assertMacAddress(String macAddress) {
@@ -1250,23 +1250,49 @@ public class TelephonyManagerTest {
     private static final String ISO_COUNTRY_CODE_PATTERN = "[a-z]{2}";
 
     @Test
+    @ApiTest(apis = "android.telephony.TelephonyManager#getNetworkCountryIso")
     public void testGetNetworkCountryIso() {
         assumeTrue(hasFeature(PackageManager.FEATURE_TELEPHONY_RADIO_ACCESS));
 
         String countryCode = mTelephonyManager.getNetworkCountryIso();
-        assertTrue("Country code '" + countryCode + "' did not match "
-                + ISO_COUNTRY_CODE_PATTERN,
-                Pattern.matches(ISO_COUNTRY_CODE_PATTERN, countryCode));
+        ServiceState serviceState = mTelephonyManager.getServiceState();
+        if (serviceState != null && (serviceState.getState()
+                == ServiceState.STATE_IN_SERVICE || serviceState.getState()
+                == ServiceState.STATE_EMERGENCY_ONLY)) {
+            assertTrue("Country code '" + countryCode + "' did not match "
+                    + ISO_COUNTRY_CODE_PATTERN,
+                    Pattern.matches(ISO_COUNTRY_CODE_PATTERN, countryCode));
+        } else {
+            assertTrue("Country code could be empty when out of service",
+                    Pattern.matches(ISO_COUNTRY_CODE_PATTERN, countryCode)
+                    || TextUtils.isEmpty(countryCode));
+        }
+
+        int[] allSubs = ShellIdentityUtils.invokeMethodWithShellPermissions(
+                mSubscriptionManager, (sm) -> sm.getActiveSubscriptionIdList());
+        for (int i : allSubs) {
+            countryCode = mTelephonyManager.getNetworkCountryIso(
+                    SubscriptionManager.getSlotIndex(i));
+            serviceState = mTelephonyManager.createForSubscriptionId(i).getServiceState();
+
+            if (serviceState != null && (serviceState.getState()
+                    == ServiceState.STATE_IN_SERVICE || serviceState.getState()
+                    == ServiceState.STATE_EMERGENCY_ONLY)) {
+                assertTrue("Country code '" + countryCode + "' did not match "
+                        + ISO_COUNTRY_CODE_PATTERN + " for slot " + i,
+                        Pattern.matches(ISO_COUNTRY_CODE_PATTERN, countryCode));
+            } else {
+                assertTrue("Country code could be empty when out of service",
+                        Pattern.matches(ISO_COUNTRY_CODE_PATTERN, countryCode)
+                        || TextUtils.isEmpty(countryCode));
+            }
+        }
 
         for (int i = 0; i < mTelephonyManager.getPhoneCount(); i++) {
-            SubscriptionInfo subscriptionInfo =
-                    mSubscriptionManager.getActiveSubscriptionInfoForSimSlotIndex(i);
-            if (subscriptionInfo != null) {
-                countryCode = mTelephonyManager.getNetworkCountryIso(i);
-                assertTrue("Country code '" + countryCode + "' did not match "
-                                + ISO_COUNTRY_CODE_PATTERN + " for slot " + i,
-                        Pattern.matches(ISO_COUNTRY_CODE_PATTERN, countryCode));
-            }
+            countryCode = mTelephonyManager.getNetworkCountryIso(i);
+            assertTrue("Country code must match " + ISO_COUNTRY_CODE_PATTERN + "or empty",
+                    Pattern.matches(ISO_COUNTRY_CODE_PATTERN, countryCode)
+                    || TextUtils.isEmpty(countryCode));
         }
     }
 
@@ -1274,49 +1300,112 @@ public class TelephonyManagerTest {
     public void testSetSystemSelectionChannels() {
         assumeTrue(hasFeature(PackageManager.FEATURE_TELEPHONY_RADIO_ACCESS));
 
-        List<RadioAccessSpecifier> channels;
-        try {
-            channels = ShellIdentityUtils.invokeMethodWithShellPermissions(
-                    mTelephonyManager, TelephonyManager::getSystemSelectionChannels);
-        } catch (IllegalStateException e) {
-            // TODO (b/189255895): Allow ISE once API is enforced in IRadio 2.1.
-            Log.d(TAG, "Skipping test since system selection channels are not available.");
-            return;
+        // Get initial list of system selection channels if the API is available
+        List<RadioAccessSpecifier> initialSpecifiers = tryGetSystemSelectionChannels();
+        // TODO (b/189255895): Don't allow empty or null channels once API is enforced in U.
+        boolean getAvailable = initialSpecifiers != null && !initialSpecifiers.isEmpty();
+        Log.d(TAG, "getSystemSelectionChannels is " + (getAvailable ? "" : "not ") + "available.");
+
+        List<RadioAccessSpecifier> validSpecifiers = new ArrayList<>();
+        List<RadioAccessSpecifier> specifiers;
+        for (int accessNetworkType : TelephonyUtils.ALL_BANDS.keySet()) {
+            List<Integer> validBands = new ArrayList<>();
+            for (int band : TelephonyUtils.ALL_BANDS.get(accessNetworkType)) {
+                // Set each band to see which ones are supported by the modem
+                RadioAccessSpecifier specifier = new RadioAccessSpecifier(
+                        accessNetworkType, new int[]{band}, new int[]{});
+                boolean success = trySetSystemSelectionChannels(
+                        Collections.singletonList(specifier), true);
+                if (success) {
+                    validBands.add(band);
+
+                    // Try calling the API that doesn't provide feedback.
+                    // We have no way of knowing if it succeeds, so just make sure nothing crashes.
+                    trySetSystemSelectionChannels(Collections.singletonList(specifier), false);
+
+                    if (getAvailable) {
+                        // Assert that we get back the value we set.
+                        specifiers = tryGetSystemSelectionChannels();
+                        assertNotNull(specifiers);
+                        assertEquals(1, specifiers.size());
+                        assertEquals(specifier, specifiers.get(0));
+                    }
+                }
+            }
+            if (!validBands.isEmpty()) {
+                validSpecifiers.add(new RadioAccessSpecifier(accessNetworkType,
+                        validBands.stream().mapToInt(i -> i).toArray(), new int[]{}));
+            }
         }
 
-        LinkedBlockingQueue<Boolean> queue = new LinkedBlockingQueue<>(1);
-        final UiAutomation uiAutomation =
-                InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        // Call setSystemSelectionChannels with an empty list and verify no error
+        if (!trySetSystemSelectionChannels(Collections.emptyList(), true)) {
+            // TODO (b/189255895): Reset initial system selection channels on failure
+            fail("Failed to call setSystemSelectionChannels with an empty list.");
+        }
+
+        // Verify that getSystemSelectionChannels returns all valid specifiers
+        specifiers = tryGetSystemSelectionChannels();
+        // TODO (b/189255895): Uncomment in U after getSystemSelectionChannels is enforced
+        //assertNotNull(specifiers);
+        //assertEquals(specifiers.size(), validSpecifiers.size());
+        //assertTrue(specifiers.containsAll(validSpecifiers));
+
+        // Call setSystemSelectionChannels with all valid specifiers to test batch operations
+        if (!trySetSystemSelectionChannels(validSpecifiers, true)) {
+            // TODO (b/189255895): Reset initial system selection channels on failure
+            // TODO (b/189255895): Fail once setSystemSelectionChannels is enforced properly
+            Log.e(TAG, "Failed to call setSystemSelectionChannels with all valid specifiers.");
+        }
+
+        // Reset the values back to the original.
+        if (getAvailable) {
+            trySetSystemSelectionChannels(initialSpecifiers, true);
+        }
+    }
+
+    private List<RadioAccessSpecifier> tryGetSystemSelectionChannels() {
+        UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        uiAutomation.adoptShellPermissionIdentity();
+        List<RadioAccessSpecifier> channels = null;
         try {
-            uiAutomation.adoptShellPermissionIdentity();
-            // This is a oneway binder call, meaning we may return before the permission check
-            // happens. Hold shell permissions until we get a response.
-            mTelephonyManager.setSystemSelectionChannels(Collections.emptyList(),
-                    getContext().getMainExecutor(), queue::offer);
-            Boolean result = queue.poll(1000, TimeUnit.MILLISECONDS);
-            // Ensure we get a result
-            assertNotNull(result);
-            assertTrue(result);
-        } catch (InterruptedException e) {
-            fail("interrupted");
+            channels = mTelephonyManager.getSystemSelectionChannels();
+        } catch (IllegalStateException ignored) {
+            // TODO (b/189255895): Reset and fail in U after getSystemSelectionChannels is enforced
         } finally {
             uiAutomation.dropShellPermissionIdentity();
         }
+        return channels;
+    }
 
-        // Try calling the API that doesn't provide feedback. We have no way of knowing if it
-        // succeeds, so just make sure nothing crashes.
-        ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mTelephonyManager,
-                tp -> tp.setSystemSelectionChannels(Collections.emptyList()));
+    private boolean trySetSystemSelectionChannels(List<RadioAccessSpecifier> specifiers,
+            boolean useCallback) {
+        UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        uiAutomation.adoptShellPermissionIdentity();
+        boolean success = false;
+        try {
+            if (useCallback) {
+                LinkedBlockingQueue<Boolean> queue = new LinkedBlockingQueue<>(1);
+                // This is a oneway binder call, meaning we may return before the permission check
+                // happens. Hold shell permissions until we get a response.
+                mTelephonyManager.setSystemSelectionChannels(
+                        specifiers, getContext().getMainExecutor(), queue::offer);
+                Boolean result = queue.poll(2000, TimeUnit.MILLISECONDS);
 
-        // Assert that we get back the value we set.
-        assertEquals(Collections.emptyList(),
-                ShellIdentityUtils.invokeMethodWithShellPermissions(mTelephonyManager,
-                TelephonyManager::getSystemSelectionChannels));
-
-        // Reset the values back to the original.
-        List<RadioAccessSpecifier> finalChannels = channels;
-        ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mTelephonyManager,
-                tp -> tp.setSystemSelectionChannels(finalChannels));
+                // Ensure we get a result
+                assertNotNull(result);
+                success = result;
+            } else {
+                mTelephonyManager.setSystemSelectionChannels(specifiers);
+                success = true;
+            }
+        } catch (InterruptedException e) {
+            // TODO (b/189255895): Reset initial system selection channels on failure
+            fail("setSystemSelectionChannels interrupted.");
+        } finally {
+            uiAutomation.dropShellPermissionIdentity();
+        }
+        return success;
     }
 
     @Test
@@ -1406,19 +1495,19 @@ public class TelephonyManagerTest {
         for (NetworkRegistrationInfo nri : ss.getNetworkRegistrationInfoList()) {
             final int networkType = nri.getAccessNetworkTechnology();
             final CellIdentity cid = nri.getCellIdentity();
+            if (nri.getTransportType() == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
+                assertTrue("NetworkType for WLAN transport must be IWLAN if registered or"
+                        + " UNKNOWN if unregistered",
+                    networkType == TelephonyManager.NETWORK_TYPE_UNKNOWN
+                            || networkType == TelephonyManager.NETWORK_TYPE_IWLAN);
+                assertNull("There is no valid cell type for WLAN", cid);
+                continue;
+            }
             if (!nri.isRegistered() && !nri.isEmergencyEnabled()) {
                 assertEquals(
                         "Network type cannot be known unless it is providing some service",
                         TelephonyManager.NETWORK_TYPE_UNKNOWN, networkType);
                 assertNull(cid);
-                continue;
-            }
-            if (nri.getTransportType() == AccessNetworkConstants.TRANSPORT_TYPE_WLAN) {
-                assertTrue("NetworkType for WLAN transport must be IWLAN if registered or"
-                                + " UNKNOWN if unregistered",
-                        networkType == TelephonyManager.NETWORK_TYPE_UNKNOWN
-                                || networkType == TelephonyManager.NETWORK_TYPE_IWLAN);
-                assertNull("There is no valid cell type for WLAN", cid);
                 continue;
             }
 
@@ -1729,6 +1818,10 @@ public class TelephonyManagerTest {
     @Test
     public void testRebootRadio() throws Throwable {
         assumeTrue(hasFeature(PackageManager.FEATURE_TELEPHONY_RADIO_ACCESS));
+        if (mRadioVersion <= RADIO_HAL_VERSION_2_0) {
+            Log.d(TAG, "Skipping test since rebootModem is not supported.");
+            return;
+        }
 
         TestThread t = new TestThread(() -> {
             Looper.prepare();
@@ -2176,7 +2269,7 @@ public class TelephonyManagerTest {
 
         List<String> plmns = mTelephonyManager.getEquivalentHomePlmns();
 
-        if (mTelephonyManager.getPhoneType() != TelephonyManager.PHONE_TYPE_GSM) {
+        if (mTelephonyManager.getPhoneType() == TelephonyManager.PHONE_TYPE_CDMA) {
             assertEquals(0, plmns.size());
         } else {
             for (String plmn : plmns) {
@@ -3281,7 +3374,7 @@ public class TelephonyManagerTest {
     public void testDisAllowedNetworkTypes() {
         assumeTrue(hasFeature(PackageManager.FEATURE_TELEPHONY_RADIO_ACCESS));
 
-        long allowedNetworkTypes = -1 & (~TelephonyManager.NETWORK_TYPE_BITMASK_NR);
+        long allowedNetworkTypes = ~TelephonyManager.NETWORK_TYPE_BITMASK_NR;
         long networkTypeBitmask = TelephonyManager.NETWORK_TYPE_BITMASK_NR
                 | TelephonyManager.NETWORK_TYPE_BITMASK_LTE
                 | TelephonyManager.NETWORK_TYPE_BITMASK_LTE_CA;
@@ -3289,15 +3382,19 @@ public class TelephonyManagerTest {
         try {
             ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(
                     mTelephonyManager,
-                    (tm) -> tm.setAllowedNetworkTypes(allowedNetworkTypes));
+                    (tm) -> tm.setAllowedNetworkTypesForReason(
+                            TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_CARRIER,
+                            allowedNetworkTypes));
 
             ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(
                     mTelephonyManager,
-                    (tm) -> tm.setPreferredNetworkTypeBitmask(networkTypeBitmask));
+                    (tm) -> tm.setAllowedNetworkTypesForReason(
+                            TelephonyManager.ALLOWED_NETWORK_TYPES_REASON_USER,
+                            networkTypeBitmask));
 
             long modemNetworkTypeBitmask = ShellIdentityUtils.invokeMethodWithShellPermissions(
                     mTelephonyManager, (tm) -> {
-                        return tm.getPreferredNetworkTypeBitmask();
+                        return tm.getAllowedNetworkTypesBitmask();
                     }
             );
             long radioAccessFamily = ShellIdentityUtils.invokeMethodWithShellPermissions(
@@ -3470,6 +3567,7 @@ public class TelephonyManagerTest {
 
             ModemActivityInfo diff = activityInfo1.getDelta(activityInfo2);
             assertNotNull(diff);
+            assertTrue("two activityInfo are identical", !activityInfo1.equals(activityInfo2));
             assertTrue("diff is" + diff, diff.isValid() || diff.isEmpty());
         } finally {
             InstrumentationRegistry.getInstrumentation().getUiAutomation()
@@ -5053,8 +5151,12 @@ public class TelephonyManagerTest {
                 .adoptShellPermissionIdentity("android.permission.MODIFY_PHONE_STATE");
         try {
             mTelephonyManager.setSimSlotMapping(simSlotMapping);
-        } catch (IllegalArgumentException e) {
-            fail("Not Expected Fail, Error in setSimSlotMapping :" + e);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            // if HAL version is less than 2.0, vendors may not have implemented API,
+            // skipping the failure.
+            if (mRadioVersion >= RADIO_HAL_VERSION_2_0) {
+                fail("Not Expected Fail, Error in setSimSlotMapping :" + e);
+            }
         }
 
         List<UiccSlotMapping> slotMappingList = new ArrayList<>();

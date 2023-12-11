@@ -717,6 +717,7 @@ public class BackgroundActivityLaunchTest extends ActivityManagerTestBase {
 
     private void clickAllowBindWidget(ResultReceiver resultReceiver) throws Exception {
         PackageManager pm = mContext.getPackageManager();
+        Assume.assumeTrue(pm.hasSystemFeature(PackageManager.FEATURE_APP_WIDGETS));
         // Skip on auto and TV devices only as they don't support appwidget bind.
         Assume.assumeFalse(pm.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE));
         Assume.assumeFalse(pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK_ONLY));
@@ -760,7 +761,7 @@ public class BackgroundActivityLaunchTest extends ActivityManagerTestBase {
             if (objectText == null) {
                 continue;
             }
-            if (objectText.equalsIgnoreCase("CREATE")) {
+            if (objectText.equalsIgnoreCase("CREATE") || objectText.equalsIgnoreCase("ALLOW")) {
                 object.click();
                 buttonClicked = true;
                 break;

@@ -283,6 +283,9 @@ public class MediaCodecResourceTest {
             if (mediaCodecInfo.isEncoder()) {
                 continue;
             }
+            if (mediaCodecInfo.getSupportedTypes().length == 0) {
+                continue;
+            }
             String mime = mediaCodecInfo.getSupportedTypes()[0];
             CodecCapabilities codecCapabilities = mediaCodecInfo.getCapabilitiesForType(mime);
             VideoCapabilities videoCapabilities = codecCapabilities.getVideoCapabilities();
@@ -308,8 +311,8 @@ public class MediaCodecResourceTest {
                 new IntentFilter(ACTION_LOW_PRIORITY_SERVICE_READY));
         Intent intent = new Intent(context, MediaCodecResourceTestLowPriorityService.class);
         context.startForegroundService(intent);
-        // Starting the service and receiving the broadcast should take less than 1 second
-        ProcessInfo processInfo = processInfoBroadcastReceiver.waitForProcessInfoMs(1000);
+        // Starting the service and receiving the broadcast should take less than 5 seconds
+        ProcessInfo processInfo = processInfoBroadcastReceiver.waitForProcessInfoMs(5000);
         context.unregisterReceiver(processInfoBroadcastReceiver);
         return processInfo;
     }
@@ -323,8 +326,8 @@ public class MediaCodecResourceTest {
         Intent intent = new Intent(context, MediaCodecResourceTestHighPriorityActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         context.startActivity(intent);
-        // Starting the activity and receiving the broadcast should take less than 1 second
-        ProcessInfo processInfo = processInfoBroadcastReceiver.waitForProcessInfoMs(1000);
+        // Starting the activity and receiving the broadcast should take less than 5 seconds
+        ProcessInfo processInfo = processInfoBroadcastReceiver.waitForProcessInfoMs(5000);
         context.unregisterReceiver(processInfoBroadcastReceiver);
         return processInfo;
     }

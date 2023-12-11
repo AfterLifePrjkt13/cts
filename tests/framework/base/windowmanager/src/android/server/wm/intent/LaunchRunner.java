@@ -25,6 +25,7 @@ import static androidx.test.platform.app.InstrumentationRegistry.getInstrumentat
 import static com.google.common.collect.Iterables.getLast;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assume.assumeTrue;
 
 import android.app.Activity;
 import android.app.ActivityOptions;
@@ -97,14 +98,18 @@ public class LaunchRunner {
 
         // Launch the first activity from the start context
         GenerationIntent firstIntent = initialState.get(0);
+        ComponentName firstLaunchActivity = firstIntent.getActualIntent().getComponent();
         activityLog.add(launchFromContext(initialContext, firstIntent.getActualIntent()));
+
+        int firstActivityTaskDisplayAreaId =
+                mTestBase.getWmState().getTaskDisplayAreaFeatureId(firstLaunchActivity);
 
         // launch the rest from the initial intents
         for (int i = 1; i < initialState.size(); i++) {
             GenerationIntent generationIntent = initialState.get(i);
             Activity activityToLaunchFrom = activityLog.get(generationIntent.getLaunchFromIndex(i));
             Activity result = launch(activityToLaunchFrom, generationIntent.getActualIntent(),
-                    generationIntent.startForResult());
+                    generationIntent.startForResult(), firstActivityTaskDisplayAreaId);
             activityLog.add(result);
         }
 
@@ -119,7 +124,7 @@ public class LaunchRunner {
             Activity activityToLaunchFrom = activityLog.get(
                     generationIntent.getLaunchFromIndex(initialState.size() + i));
             Activity result = launch(activityToLaunchFrom, generationIntent.getActualIntent(),
-                    generationIntent.startForResult());
+                    generationIntent.startForResult(), firstActivityTaskDisplayAreaId);
             activityLog.add(result);
         }
 
@@ -256,6 +261,11 @@ public class LaunchRunner {
     }
 
     public Activity launch(Activity activityContext, Intent intent, boolean startForResult) {
+        return launch(activityContext, intent, startForResult, -1);
+    }
+
+    public Activity launch(Activity activityContext, Intent intent, boolean startForResult,
+                           int expectedTda) {
         Instrumentation.ActivityMonitor monitor = getInstrumentation()
                 .addMonitor((String) null, null, false);
 
@@ -268,13 +278,21 @@ public class LaunchRunner {
 
         if (activity == null) {
             return activityContext;
-        } else if (startForResult && activityContext == activity) {
-            // The result may have been sent back to caller activity and forced the caller activity
-            // to be resumed again, before the started activity actually resumed. Just wait for idle
-            // for that case.
-            getInstrumentation().waitForIdleSync();
         } else {
-            waitAndAssertActivityLaunched(activity, intent);
+            if (expectedTda != -1) {
+                // If a expected TDA is given, we should check that the launched componentName
+                // is where it should be
+                assertActivityLaunchedOnSameTda(intent.getComponent(), expectedTda);
+            }
+
+            if (startForResult && activityContext == activity) {
+                // The result may have been sent back to caller activity and forced the caller activity
+                // to be resumed again, before the started activity actually resumed. Just wait for idle
+                // for that case.
+                getInstrumentation().waitForIdleSync();
+            } else {
+                waitAndAssertActivityLaunched(activity, intent);
+            }
         }
 
         return activity;
@@ -286,6 +304,22 @@ public class LaunchRunner {
         final ComponentName testActivityName = activity.getComponentName();
         mTestBase.waitAndAssertTopResumedActivity(testActivityName,
                 Display.DEFAULT_DISPLAY, "Activity must be resumed");
+    }
+
+    /**
+     * Checks if a component was launched on the expected Task Display Area or not.
+     *
+     * If the check fail, the test will have an assumption fail result.
+     * @param activity The component to be searched for
+     * @param expectedTda The task display in which the activity is expected to be launched
+     */
+    private void assertActivityLaunchedOnSameTda(ComponentName activity, int expectedTda) {
+        if (activity != null){
+            mTestBase.getWmState().computeState(activity);
+
+            assumeTrue("Should launch in same tda",
+                    expectedTda == mTestBase.getWmState().getTaskDisplayAreaFeatureId(activity));
+        }
     }
 
     /**

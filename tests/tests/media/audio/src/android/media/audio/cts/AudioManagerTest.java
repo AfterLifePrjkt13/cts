@@ -107,7 +107,7 @@ public class AudioManagerTest extends InstrumentationTestCase {
     private final static String TAG = "AudioManagerTest";
 
     private final static long ASYNC_TIMING_TOLERANCE_MS = 50;
-    private final static long POLL_TIME_VOLUME_ADJUST = 200;
+    private static final long POLL_TIME_VOLUME_ADJUST = 400;
     private final static long POLL_TIME_UPDATE_INTERRUPTION_FILTER = 5000;
     private final static int MP3_TO_PLAY = R.raw.testmp3; // ~ 5 second mp3
     private final static long POLL_TIME_PLAY_MUSIC = 2000;

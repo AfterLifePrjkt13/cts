@@ -41,6 +41,7 @@ android_test {
     srcs: [
         "src/**/*.java",
         "src/**/*.kt",
+        "app/src/android/app/stubs/RemoteActivity.java",
         "NotificationListener/src/com/android/test/notificationlistener/INotificationUriAccessService.aidl",
     ],
     // Tag this module as a cts test artifact
@@ -51,12 +52,15 @@ android_test {
     ],
     instrumentation_for: "CtsAppTestStubs",
     sdk_version: "test_current",
-    min_sdk_version: "14",
+    // 21 required for multi-dex.
+    min_sdk_version: "21",
     // Disable coverage since it pushes us over the dex limit and we don't
     // actually need to measure the tests themselves.
     jacoco: {
         exclude_filter: ["**"],
     },
+    // Even with coverage disabled, we're close to the single dex limit, so allow use of multi-dex.
+    dxflags: ["--multi-dex"],
     data: [
         ":CtsSimpleApp",
         ":CtsAppTestStubs",

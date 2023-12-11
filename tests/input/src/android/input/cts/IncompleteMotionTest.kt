@@ -37,6 +37,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
@@ -100,34 +101,42 @@ class IncompleteMotionTest {
 
         // Start a valid touch stream
         sendEvent(downTime, ACTION_DOWN, x, y, true /*sync*/)
+        val resultFuture = CompletableFuture<Void>()
         // Lock up the UI thread. This ensures that the motion event that we will write will
         // not get processed by the app right away.
         activity.runOnUiThread {
             val sendMoveAndFocus = thread(start = true) {
-                sendEvent(downTime, ACTION_MOVE, x, y + 10, false /*sync*/)
-                // The MOVE event is sent async because the UI thread is blocked.
-                // Give dispatcher some time to send it to the app
-                SystemClock.sleep(700)
+                try {
+                    sendEvent(downTime, ACTION_MOVE, x, y + 10, false /*sync*/)
+                    // The MOVE event is sent async because the UI thread is blocked.
+                    // Give dispatcher some time to send it to the app
+                    SystemClock.sleep(700)
 
-                val handlerThread = HandlerThread("Receive broadcast from overlay activity")
-                handlerThread.start()
-                val looper: Looper = handlerThread.looper
-                val handler = Handler(looper)
-                val receiver = OverlayFocusedBroadcastReceiver()
-                val intentFilter = IntentFilter(OVERLAY_ACTIVITY_FOCUSED)
-                activity.registerReceiver(receiver, intentFilter, null, handler)
+                    val handlerThread = HandlerThread("Receive broadcast from overlay activity")
+                    handlerThread.start()
+                    val looper: Looper = handlerThread.looper
+                    val handler = Handler(looper)
+                    val receiver = OverlayFocusedBroadcastReceiver()
+                    val intentFilter = IntentFilter(OVERLAY_ACTIVITY_FOCUSED)
+                    activity.registerReceiver(receiver, intentFilter, null, handler)
 
-                // Now send hasFocus=false event to the app by launching a new focusable window
-                startOverlayActivity()
-                PollingCheck.waitFor { receiver.overlayActivityIsFocused() }
-                activity.unregisterReceiver(receiver)
-                handlerThread.quit()
-                // We need to ensure that the focus event has been written to the app's socket
-                // before unblocking the UI thread. Having the overlay activity receive
-                // hasFocus=true event is a good proxy for that. However, it does not guarantee
-                // that dispatcher has written the hasFocus=false event to the current activity.
-                // For safety, add another small sleep here
-                SystemClock.sleep(300)
+                    // Now send hasFocus=false event to the app by launching a new focusable window
+                    startOverlayActivity()
+                    PollingCheck.waitFor { receiver.overlayActivityIsFocused() }
+                    activity.unregisterReceiver(receiver)
+                    handlerThread.quit()
+                    // We need to ensure that the focus event has been written to the app's socket
+                    // before unblocking the UI thread. Having the overlay activity receive
+                    // hasFocus=true event is a good proxy for that. However, it does not guarantee
+                    // that dispatcher has written the hasFocus=false event to the current activity.
+                    // For safety, add another small sleep here
+                    SystemClock.sleep(300)
+                    resultFuture.complete(null)
+                } catch (e: Throwable) {
+                    // Catch potential throwable as to not crash UI thread, rethrow and validate
+                    // outside.
+                    resultFuture.completeExceptionally(e)
+                }
             }
             sendMoveAndFocus.join()
         }
@@ -139,6 +148,9 @@ class IncompleteMotionTest {
         // If we wait too long here, we will cause ANR (if the platform has a bug).
         // If the MOVE event is received, however, we can stop the test.
         PollingCheck.waitFor { activity.receivedMove() }
+        // Before finishing the test, check that no exceptions occurred while running the
+        // instructions in the 'sendMoveAndFocus' thread.
+        resultFuture.get()
     }
 
     private fun sendEvent(downTime: Long, action: Int, x: Float, y: Float, sync: Boolean) {

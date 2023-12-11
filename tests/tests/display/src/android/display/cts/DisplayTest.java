@@ -899,7 +899,9 @@ public class DisplayTest {
 
             @Override
             public void onDisplayChanged(int displayId) {
-                if (displayId == display.getDisplayId()) {
+                if (displayId == display.getDisplayId()
+                        && display.getMode() != null
+                        && display.getMode().getModeId() == newMode.getModeId()) {
                     changeSignal.countDown();
                 }
             }

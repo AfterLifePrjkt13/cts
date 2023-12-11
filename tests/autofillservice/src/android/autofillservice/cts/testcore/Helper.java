@@ -39,7 +39,7 @@ import android.app.assist.AssistStructure;
 import android.app.assist.AssistStructure.ViewNode;
 import android.app.assist.AssistStructure.WindowNode;
 import android.autofillservice.cts.R;
-import android.autofillservice.cts.activities.LoginActivity;
+import android.autofillservice.cts.activities.AbstractAutoFillActivity;
 import android.content.AutofillOptions;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -1254,12 +1254,12 @@ public final class Helper {
      * @param event event to be asserted
      * @param key the only key expected in the client state bundle
      * @param value the only value expected in the client state bundle
-     * @param expectedPresentation the exptected ui presentation type
+     * @param uiType the expected ui presentation type
      */
     public static void assertFillEventForDatasetShown(@NonNull FillEventHistory.Event event,
-            @NonNull String key, @NonNull String value, int expectedPresentation) {
+            @NonNull String key, @NonNull String value, int uiType) {
         assertFillEvent(event, TYPE_DATASETS_SHOWN, NULL_DATASET_ID, key, value, null);
-        assertFillEventPresentationType(event, expectedPresentation);
+        assertFillEventPresentationType(event, uiType);
     }
 
     /**
@@ -1269,9 +1269,9 @@ public final class Helper {
      * @param event event to be asserted
      */
     public static void assertFillEventForDatasetShown(@NonNull FillEventHistory.Event event,
-            int expectedPresentation) {
+            int uiType) {
         assertFillEvent(event, TYPE_DATASETS_SHOWN, NULL_DATASET_ID, null, null, null);
-        assertFillEventPresentationType(event, expectedPresentation);
+        assertFillEventPresentationType(event, uiType);
     }
 
     /**
@@ -1283,11 +1283,13 @@ public final class Helper {
      * @param datasetId dataset set id expected in the event
      * @param key the only key expected in the client state bundle
      * @param value the only value expected in the client state bundle
+     * @param uiType the expected ui presentation type
      */
     public static void assertFillEventForDatasetAuthenticationSelected(
             @NonNull FillEventHistory.Event event,
-            @Nullable String datasetId, @NonNull String key, @NonNull String value) {
+            @Nullable String datasetId, @NonNull String key, @NonNull String value, int uiType) {
         assertFillEvent(event, TYPE_DATASET_AUTHENTICATION_SELECTED, datasetId, key, value, null);
+        assertFillEventPresentationType(event, uiType);
     }
 
     /**
@@ -1298,11 +1300,13 @@ public final class Helper {
      * @param datasetId dataset set id expected in the event
      * @param key the only key expected in the client state bundle
      * @param value the only value expected in the client state bundle
+     * @param uiType the expected ui presentation type
      */
     public static void assertFillEventForAuthenticationSelected(
             @NonNull FillEventHistory.Event event,
-            @Nullable String datasetId, @NonNull String key, @NonNull String value) {
+            @Nullable String datasetId, @NonNull String key, @NonNull String value, int uiType) {
         assertFillEvent(event, TYPE_AUTHENTICATION_SELECTED, datasetId, key, value, null);
+        assertFillEventPresentationType(event, uiType);
     }
 
     public static void assertFillEventForFieldsClassification(@NonNull FillEventHistory.Event event,
@@ -1701,7 +1705,7 @@ public final class Helper {
     /**
      * Asserts whether mock IME is showing
      */
-    public static void assertMockImeStatus(LoginActivity activity,
+    public static void assertMockImeStatus(AbstractAutoFillActivity activity,
             boolean expectedImeShow) throws Exception {
         Timeouts.MOCK_IME_TIMEOUT.run("assertMockImeStatus(" + expectedImeShow + ")",
                 () -> {

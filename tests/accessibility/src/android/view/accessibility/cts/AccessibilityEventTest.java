@@ -16,10 +16,13 @@
 
 package android.view.accessibility.cts;
 
+import static android.accessibilityservice.cts.utils.ActivityLaunchUtils.launchActivityAndWaitForItToBeOnscreen;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import android.accessibility.cts.common.AccessibilityDumpOnFailureRule;
 import android.accessibility.cts.common.InstrumentedAccessibilityServiceTestRule;
@@ -63,7 +66,7 @@ import java.util.concurrent.TimeoutException;
 @RunWith(AndroidJUnit4.class)
 public class AccessibilityEventTest {
     private static final long IDLE_TIMEOUT_MS = 500;
-    private static final long DEFAULT_TIMEOUT_MS = 1000;
+    private static final long DEFAULT_TIMEOUT_MS = 2000;
 
     // From ViewConfiguration.SEND_RECURRING_ACCESSIBILITY_EVENTS_INTERVAL_MILLIS
     private static final long SEND_RECURRING_ACCESSIBILITY_EVENTS_INTERVAL_MILLIS = 100;
@@ -92,22 +95,34 @@ public class AccessibilityEventTest {
 
     @Before
     public void setUp() throws Throwable {
-        final Activity activity = mActivityRule.launchActivity(null);
-        mPackageName = activity.getApplicationContext().getPackageName();
         sInstrumentation = InstrumentationRegistry.getInstrumentation();
         sUiAutomation = sInstrumentation.getUiAutomation();
+        final Activity activity = launchActivityAndWaitForItToBeOnscreen(
+                sInstrumentation, sUiAutomation, mActivityRule);
+        mPackageName = activity.getApplicationContext().getPackageName();
         mInstrumentedAccessibilityServiceRule.enableService();
-        mActivityRule.runOnUiThread(
-                () -> {
-                    final LinearLayout grandparent = new LinearLayout(activity);
-                    activity.setContentView(grandparent);
-                    mParentView = new EventReportingLinearLayout(activity);
-                    mChildView = new View(activity);
-                    mTextView = new TextView(activity);
-                    grandparent.addView(mParentView);
-                    mParentView.addView(mChildView);
-                    mParentView.addView(mTextView);
-                });
+        sUiAutomation.executeAndWaitForEvent(() -> {
+                    try {
+                        mActivityRule.runOnUiThread(() -> {
+                            final LinearLayout grandparent = new LinearLayout(activity);
+                            activity.setContentView(grandparent);
+                            mParentView = new EventReportingLinearLayout(activity);
+                            mChildView = new View(activity);
+                            mTextView = new TextView(activity);
+                            grandparent.addView(mParentView);
+                            mParentView.addView(mChildView);
+                            mParentView.addView(mTextView);
+                        });
+                    } catch (Throwable e) {
+                        fail(e.toString());
+                    }
+                },
+                // There can be a race where the test Activity gets focus and we start test.
+                // Because we don't specify flagRetrieveInteractiveWindows in this test, until
+                // the Activity gets focus, no events will be delivered from it.
+                // So. this waits for any event from the test activity.
+                accessibilityEvent -> mPackageName.equals(accessibilityEvent.getPackageName()),
+                DEFAULT_TIMEOUT_MS);
         sUiAutomation.waitForIdle(IDLE_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
     }
 

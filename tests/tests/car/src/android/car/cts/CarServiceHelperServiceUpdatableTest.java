@@ -25,6 +25,12 @@ import static org.testng.Assert.fail;
 
 import android.app.UiAutomation;
 import android.car.Car;
+import android.car.annotation.ApiRequirements;
+import android.car.test.ApiCheckerRule;
+import android.car.test.ApiCheckerRule.IgnoreInvalidApi;
+import android.car.test.ApiCheckerRule.SupportedVersionTest;
+import android.car.test.ApiCheckerRule.UnsupportedVersionTest;
+import android.car.test.ApiCheckerRule.UnsupportedVersionTest.Behavior;
 import android.car.user.CarUserManager;
 import android.car.user.CarUserManager.UserLifecycleEvent;
 import android.car.user.CarUserManager.UserLifecycleListener;
@@ -32,15 +38,18 @@ import android.os.NewUserRequest;
 import android.os.NewUserResponse;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
+import android.os.UserHandle;
 import android.os.UserManager;
 import android.util.Log;
 
-import androidx.test.filters.FlakyTest;
 import androidx.test.InstrumentationRegistry;
+import androidx.test.filters.FlakyTest;
 
+import com.android.compatibility.common.util.ApiTest;
 import com.android.compatibility.common.util.SystemUtil;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.BufferedReader;
@@ -57,6 +66,11 @@ public final class CarServiceHelperServiceUpdatableTest extends CarApiTestBase {
     private static final int TIMEOUT_MS = 60_000;
     private static final int WAIT_TIME_MS = 1_000;
 
+    // TODO(b/242350638): move to super class (although it would need to call
+    // disableAnnotationsCheck()
+    @Rule
+    public final ApiCheckerRule mApiCheckerRule = new ApiCheckerRule.Builder().build();
+
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -64,45 +78,131 @@ public final class CarServiceHelperServiceUpdatableTest extends CarApiTestBase {
     }
 
     @Test
+    @ApiTest(apis = {"com.android.internal.car.CarServiceHelperService#dump(PrintWriter,String[])"})
+    @IgnoreInvalidApi(reason = "Class not in classpath as it's indirectly tested using dumpsys")
+    @ApiRequirements(minCarVersion = ApiRequirements.CarVersion.TIRAMISU_0,
+            minPlatformVersion = ApiRequirements.PlatformVersion.TIRAMISU_0)
     public void testCarServiceHelperServiceDump() throws Exception {
-        assumeThat("System_server_dumper not implemented.",
-                executeShellCommand("service check system_server_dumper"),
-                containsStringIgnoringCase("system_server_dumper: found"));
+        assumeSystemServerDumpSupported();
 
         assertWithMessage("System server dumper")
                 .that(executeShellCommand("dumpsys system_server_dumper --list"))
                 .contains("CarServiceHelper");
+    }
+
+    @Test
+    @ApiTest(apis = {
+            "com.android.internal.car.CarServiceHelperServiceUpdatable#dump(PrintWriter,String[])"
+    })
+    @IgnoreInvalidApi(reason = "Class not in classpath as it's indirectly tested using dumpsys")
+    @ApiRequirements(minCarVersion = ApiRequirements.CarVersion.TIRAMISU_0,
+            minPlatformVersion = ApiRequirements.PlatformVersion.TIRAMISU_0)
+    public void testCarServiceHelperServiceDump_carServiceProxy() throws Exception {
+        assumeSystemServerDumpSupported();
 
         assertWithMessage("CarServiceHelperService dump")
                 .that(executeShellCommand("dumpsys system_server_dumper --name CarServiceHelper"))
                 .contains("CarServiceProxy");
+    }
 
-        // Test setSafeMode
-        try {
-            executeShellCommand("cmd car_service emulate-driving-state drive");
-
-            assertWithMessage("CarServiceHelperService dump")
-                    .that(executeShellCommand(
-                            "dumpsys system_server_dumper --name CarServiceHelper"))
-                    .contains("Safe to run device policy operations: false");
-        } finally {
-            executeShellCommand("cmd car_service emulate-driving-state park");
-        }
+    @Test
+    @ApiTest(apis = {
+            "com.android.internal.car.CarServiceHelperServiceUpdatable#dump(PrintWriter,String[])"
+    })
+    @IgnoreInvalidApi(reason = "Class not in classpath as it's indirectly tested using dumpsys")
+    @ApiRequirements(minCarVersion = ApiRequirements.CarVersion.TIRAMISU_0,
+            minPlatformVersion = ApiRequirements.PlatformVersion.TIRAMISU_0)
+    public void testCarServiceHelperServiceDump_serviceStacks() throws Exception {
+        assumeSystemServerDumpSupported();
 
         assertWithMessage("CarServiceHelperService dump")
-                .that(executeShellCommand("dumpsys system_server_dumper --name CarServiceHelper"))
-                .contains("Safe to run device policy operations: true");
-
-        // Test dumpServiceStacks
-        assertWithMessage("CarServiceHelperService dump")
-                .that(executeShellCommand("dumpsys system_server_dumper --name CarServiceHelper"
-                        + " --dump-service-stacks"))
+                .that(dumpCarServiceHelper("--dump-service-stacks"))
                 .contains("dumpServiceStacks ANR file path=/data/anr/anr_");
+    }
+
+    @Test
+    @ApiTest(apis = {"android.car.user.CarUserManager#USER_LIFECYCLE_EVENT_TYPE_CREATED"})
+    @SupportedVersionTest(unsupportedVersionTest =
+            "testSendUserLifecycleEventAndOnUserCreated_unsupportedVersion")
+    public void testSendUserLifecycleEventAndOnUserCreated_supportedVersion() throws Exception {
+        testSendUserLifecycleEventAndOnUserCreated(/*onSupportedVersion=*/ true);
+    }
+
+    @Test
+    @ApiTest(apis = {"android.car.user.CarUserManager#USER_LIFECYCLE_EVENT_TYPE_CREATED"})
+    @UnsupportedVersionTest(behavior = Behavior.EXPECT_PASS,
+            supportedVersionTest = "testSendUserLifecycleEventAndOnUserCreated_supportedVersion")
+    public void testSendUserLifecycleEventAndOnUserCreated_unsupportedVersion() throws Exception {
+        testSendUserLifecycleEventAndOnUserCreated(/*onSupportedVersion=*/ false);
+    }
+
+    private void testSendUserLifecycleEventAndOnUserCreated(boolean onSupportedVersion)
+            throws Exception {
+        // Add listener to check if user started
+        CarUserManager carUserManager = (CarUserManager) getCar()
+                .getCarManager(Car.CAR_USER_SERVICE);
+        LifecycleListener listener = new LifecycleListener();
+        carUserManager.addListener(Runnable::run, listener);
+
+        NewUserResponse response = null;
+        UserManager userManager = null;
+        try {
+            // get create User permissions
+            InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                    .adoptShellPermissionIdentity(android.Manifest.permission.CREATE_USERS);
+
+            // CreateUser
+            userManager = mContext.getSystemService(UserManager.class);
+            response = userManager.createUser(new NewUserRequest.Builder().build());
+            assertThat(response.isSuccessful()).isTrue();
+
+            int userId = response.getUser().getIdentifier();
+
+            if (onSupportedVersion) {
+                listener.assertEventReceived(
+                        userId, CarUserManager.USER_LIFECYCLE_EVENT_TYPE_CREATED);
+                // check the dump stack
+                assertUserLifecycleEventLogged(
+                        CarUserManager.USER_LIFECYCLE_EVENT_TYPE_CREATED, userId);
+            } else {
+                listener.assertEventNotReceived(
+                        userId, CarUserManager.USER_LIFECYCLE_EVENT_TYPE_CREATED);
+            }
+        } finally {
+            // Clean up the user that was previously created.
+            userManager.removeUser(response.getUser());
+            carUserManager.removeListener(listener);
+            InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                    .dropShellPermissionIdentity();
+        }
     }
 
     @FlakyTest(bugId = 222167696)
     @Test
-    public void testSendUserLifecycleEventAndOnUserRemoved() throws Exception {
+    @ApiTest(apis = {"android.car.user.CarUserManager#USER_LIFECYCLE_EVENT_TYPE_REMOVED"})
+    @SupportedVersionTest(unsupportedVersionTest =
+            "testSendUserLifecycleEventAndOnUserRemoved_unsupportedVersion")
+    public void testSendUserLifecycleEventAndOnUserRemoved_supportedVersion() throws Exception {
+        testSendUserLifecycleEventAndOnUserRemoved(/*onSupportedVersion=*/ true);
+    }
+
+    @FlakyTest(bugId = 222167696)
+    @Test
+    @ApiTest(apis = {"android.car.user.CarUserManager#USER_LIFECYCLE_EVENT_TYPE_REMOVED"})
+    @UnsupportedVersionTest(behavior = Behavior.EXPECT_PASS,
+            supportedVersionTest = "testSendUserLifecycleEventAndOnUserRemoved_supportedVersion")
+    public void testSendUserLifecycleEventAndOnUserRemoved_unsupportedVersion() throws Exception {
+        testSendUserLifecycleEventAndOnUserRemoved(/*onSupportedVersion=*/ false);
+    }
+
+    private static void assumeSystemServerDumpSupported() throws IOException {
+        assumeThat("System_server_dumper not implemented.",
+                executeShellCommand("service check system_server_dumper"),
+                containsStringIgnoringCase("system_server_dumper: found"));
+    }
+
+    private void testSendUserLifecycleEventAndOnUserRemoved(boolean onSupportedVersion)
+            throws Exception {
         // Add listener to check if user started
         CarUserManager carUserManager = (CarUserManager) getCar()
                 .getCarManager(Car.CAR_USER_SERVICE);
@@ -125,11 +225,23 @@ public final class CarServiceHelperServiceUpdatableTest extends CarApiTestBase {
             int userId = response.getUser().getIdentifier();
             startUser(userId);
             listener.assertEventReceived(userId, CarUserManager.USER_LIFECYCLE_EVENT_TYPE_STARTING);
+            // check the dump stack
+            assertUserLifecycleEventLogged(CarUserManager.USER_LIFECYCLE_EVENT_TYPE_STARTING,
+                    userId);
 
             // TestOnUserRemoved call
             userRemoved = userManager.removeUser(response.getUser());
-            // check the dump stack
-            assertLastUserRemoved(userId);
+
+            if (onSupportedVersion) {
+                listener.assertEventReceived(
+                        userId, CarUserManager.USER_LIFECYCLE_EVENT_TYPE_REMOVED);
+                // check the dump stack
+                assertUserLifecycleEventLogged(
+                        CarUserManager.USER_LIFECYCLE_EVENT_TYPE_REMOVED, userId);
+            } else {
+                listener.assertEventNotReceived(
+                        userId, CarUserManager.USER_LIFECYCLE_EVENT_TYPE_REMOVED);
+            }
         } finally {
             if (!userRemoved && response != null && response.isSuccessful()) {
                 userManager.removeUser(response.getUser());
@@ -140,11 +252,17 @@ public final class CarServiceHelperServiceUpdatableTest extends CarApiTestBase {
         }
     }
 
-    private void assertLastUserRemoved(int userId) throws Exception {
+    private void assertUserLifecycleEventLogged(int eventType, int userId) throws Exception {
+        assertUserLifecycleEventLogged(eventType, UserHandle.USER_NULL, userId);
+    }
+
+    private void assertUserLifecycleEventLogged(int eventType, int fromUserId, int toUserId)
+            throws Exception {
         // check for the logcat
         // TODO(b/210874444): Use logcat helper from
         // cts/tests/tests/car_builtin/src/android/car/cts/builtin/util/LogcatHelper.java
-        String match = "car_service_on_user_removed: " + userId;
+        String match = String.format("car_service_on_user_lifecycle: [%d,%d,%d]", eventType,
+                fromUserId, toUserId);
         long timeout = 60_000;
         long startTime = SystemClock.elapsedRealtime();
         UiAutomation automation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
@@ -167,6 +285,15 @@ public final class CarServiceHelperServiceUpdatableTest extends CarApiTestBase {
             fail("match '" + match + "' was not found, IO exception: " + e);
         }
 
+    }
+
+    private String dumpCarServiceHelper(String...args) throws IOException {
+        StringBuilder cmd = new StringBuilder(
+                "dumpsys system_server_dumper --name CarServiceHelper");
+        for (String arg : args) {
+            cmd.append(' ').append(arg);
+        }
+        return executeShellCommand(cmd.toString());
     }
 
     // TODO(214100537): Improve listener by removing sleep.
@@ -195,6 +322,20 @@ public final class CarServiceHelperServiceUpdatableTest extends CarApiTestBase {
             }
 
             fail("Event" + eventType + " was not received within timeoutMs: " + TIMEOUT_MS);
+        }
+
+
+        public void assertEventNotReceived(int userId, int eventType)
+                throws InterruptedException {
+            long startTime = SystemClock.elapsedRealtime();
+            while (SystemClock.elapsedRealtime() - startTime < TIMEOUT_MS) {
+                boolean result = checkEvent(userId, eventType);
+                if (result) {
+                    fail("Event" + eventType
+                            + " was not expected but was received within timeoutMs: " + TIMEOUT_MS);
+                }
+                Thread.sleep(WAIT_TIME_MS);
+            }
         }
 
         private boolean checkEvent(int userId, int eventType) {

@@ -81,6 +81,7 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ErrorCollector;
@@ -130,6 +131,10 @@ public class DisplayCutoutTests {
 
     @Parameter(1)
     public String orientationName;
+
+    @ClassRule
+    public static SetRequestedOrientationRule sSetRequestedOrientationRule =
+            new SetRequestedOrientationRule();
 
     @Rule
     public final ErrorCollector mErrorCollector = new ErrorCollector();
@@ -672,8 +677,6 @@ public class DisplayCutoutTests {
             super.onCreate(savedInstanceState);
             getWindow().requestFeature(Window.FEATURE_NO_TITLE);
             if (getIntent() != null) {
-                getWindow().getAttributes().layoutInDisplayCutoutMode = getIntent().getIntExtra(
-                        EXTRA_CUTOUT_MODE, LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT);
                 setRequestedOrientation(getIntent().getIntExtra(
                         EXTRA_ORIENTATION, SCREEN_ORIENTATION_UNSPECIFIED));
             }
@@ -681,6 +684,13 @@ public class DisplayCutoutTests {
             view.setLayoutParams(new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT));
             view.setOnApplyWindowInsetsListener((v, insets) -> mDispatchedInsets = insets);
             setContentView(view);
+            // Because the PhoneWindow.java will set the CutoutMode
+            // So we have to set the CutoutMode after the setContentView method
+            if (getIntent() != null) {
+                int mode = getIntent().getIntExtra(EXTRA_CUTOUT_MODE,
+                        LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT);
+                getWindow().getAttributes().layoutInDisplayCutoutMode = mode;
+            }
         }
 
         @Override

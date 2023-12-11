@@ -54,8 +54,8 @@ public class BluetoothLeAudioTest extends AndroidTestCase {
     private BluetoothLeAudio mBluetoothLeAudio;
     private boolean mIsLeAudioSupported;
     private boolean mIsProfileReady;
-    private Condition mConditionProfileIsConnected;
-    private ReentrantLock mProfileConnectedlock;
+    private Condition mConditionProfileConnection;
+    private ReentrantLock mProfileConnectionlock;
     private Executor mTestExecutor;
     private TestCallback mTestCallback;
     private boolean mCodecConfigChangedCalled;
@@ -124,8 +124,8 @@ public class BluetoothLeAudioTest extends AndroidTestCase {
             mAdapter = manager.getAdapter();
             assertTrue(BTAdapterUtils.enableAdapter(mAdapter, mContext));
 
-            mProfileConnectedlock = new ReentrantLock();
-            mConditionProfileIsConnected  = mProfileConnectedlock.newCondition();
+            mProfileConnectionlock = new ReentrantLock();
+            mConditionProfileConnection = mProfileConnectionlock.newCondition();
             mIsProfileReady = false;
             mBluetoothLeAudio = null;
 
@@ -152,11 +152,20 @@ public class BluetoothLeAudioTest extends AndroidTestCase {
             mBluetoothLeAudio = null;
             mIsProfileReady = false;
         }
-        if (mAdapter != null) {
-            assertTrue(BTAdapterUtils.disableAdapter(mAdapter, mContext));
-        }
         TestUtils.dropPermissionAsShellUid();
         mAdapter = null;
+    }
+
+    public void test_closeProfileProxy() {
+        if (!(mHasBluetooth && mIsLeAudioSupported)) return;
+
+        assertTrue(waitForProfileConnect());
+        assertNotNull(mBluetoothLeAudio);
+        assertTrue(mIsProfileReady);
+
+        mAdapter.closeProfileProxy(BluetoothProfile.LE_AUDIO, mBluetoothLeAudio);
+        assertTrue(waitForProfileDisconnect());
+        assertFalse(mIsProfileReady);
     }
 
     public void test_getConnectedDevices() {
@@ -360,11 +369,11 @@ public class BluetoothLeAudioTest extends AndroidTestCase {
     }
 
     private boolean waitForProfileConnect() {
-        mProfileConnectedlock.lock();
+        mProfileConnectionlock.lock();
         try {
             // Wait for the Adapter to be disabled
             while (!mIsProfileReady) {
-                if (!mConditionProfileIsConnected.await(
+                if (!mConditionProfileConnection.await(
                         PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                     // Timeout
                     Log.e(TAG, "Timeout while waiting for Profile Connect");
@@ -374,9 +383,29 @@ public class BluetoothLeAudioTest extends AndroidTestCase {
         } catch (InterruptedException e) {
             Log.e(TAG, "waitForProfileConnect: interrrupted");
         } finally {
-            mProfileConnectedlock.unlock();
+            mProfileConnectionlock.unlock();
         }
         return mIsProfileReady;
+    }
+
+    private boolean waitForProfileDisconnect() {
+        mConditionProfileConnection = mProfileConnectionlock.newCondition();
+        mProfileConnectionlock.lock();
+        try {
+            while (mIsProfileReady) {
+                if (!mConditionProfileConnection.await(
+                        PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    // Timeout
+                    Log.e(TAG, "Timeout while waiting for Profile Disconnect");
+                    break;
+                } // else spurious wakeups
+            }
+        } catch (InterruptedException e) {
+            Log.e(TAG, "waitForProfileDisconnect: interrrupted");
+        } finally {
+            mProfileConnectionlock.unlock();
+        }
+        return !mIsProfileReady;
     }
 
     private final class BluetoothLeAudioServiceListener implements
@@ -384,18 +413,25 @@ public class BluetoothLeAudioTest extends AndroidTestCase {
 
         @Override
         public void onServiceConnected(int profile, BluetoothProfile proxy) {
-            mProfileConnectedlock.lock();
+            mProfileConnectionlock.lock();
             mBluetoothLeAudio = (BluetoothLeAudio) proxy;
             mIsProfileReady = true;
             try {
-                mConditionProfileIsConnected.signal();
+                mConditionProfileConnection.signal();
             } finally {
-                mProfileConnectedlock.unlock();
+                mProfileConnectionlock.unlock();
             }
         }
 
         @Override
         public void onServiceDisconnected(int profile) {
+            mProfileConnectionlock.lock();
+            mIsProfileReady = false;
+            try {
+                mConditionProfileConnection.signal();
+            } finally {
+                mProfileConnectionlock.unlock();
+            }
         }
     }
 }

@@ -33,7 +33,6 @@ import static com.android.cts.mockime.ImeEventStreamTestUtils.expectEvent;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
@@ -51,6 +50,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.app.Instrumentation;
 import android.graphics.Insets;
+import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.platform.test.annotations.Presubmit;
 import android.server.wm.WindowInsetsAnimationTestBase.TestActivity;
@@ -105,7 +105,7 @@ import java.util.stream.Collectors;
 @RunWith(Parameterized.class)
 public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase {
 
-    TestActivity mActivity;
+    ControllerTestActivity mActivity;
     View mRootView;
     ControlListener mListener;
     CancellationSignal mCancellationSignal = new CancellationSignal();
@@ -139,6 +139,16 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
         };
     }
 
+    public static class ControllerTestActivity extends TestActivity {
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            // Ensure to set animation callback to null before starting a test. Otherwise, launching
+            // this activity might trigger some inset animation accidentally.
+            mView.setWindowInsetsAnimationCallback(null);
+        }
+    }
+
     @Before
     public void setUpWindowInsetsAnimationControllerTests() throws Throwable {
         assumeFalse(
@@ -152,7 +162,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
             assumeThat(MockImeSession.getUnavailabilityReason(instrumentation.getContext()),
                     nullValue());
 
-            // For the best test stability MockIme should be selected before launching TestActivity.
+            // For the best test stability MockIme should be selected before launching
+            // ControllerTestActivity.
             mMockImeSession = MockImeSession.create(
                     instrumentation.getContext(), instrumentation.getUiAutomation(),
                     new ImeSettings.Builder());
@@ -161,14 +172,15 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
             mockImeEventStream = null;
         }
 
-        mActivity = startActivityInWindowingMode(TestActivity.class, WINDOWING_MODE_FULLSCREEN);
+        mActivity = startActivityInWindowingMode(ControllerTestActivity.class,
+                WINDOWING_MODE_FULLSCREEN);
         mRootView = mActivity.getWindow().getDecorView();
         mListener = new ControlListener(mErrorCollector);
         assumeTestCompatibility();
 
         if (mockImeEventStream != null) {
-            // TestActivity has a focused EditText. Hence MockIme should receive onStartInput() for
-            // that EditText within a reasonable time.
+            // ControllerTestActivity has a focused EditText. Hence MockIme should receive
+            // onStartInput() for that EditText within a reasonable time.
             expectEvent(mockImeEventStream,
                     editorMatcher("onStartInput", mActivity.getEditTextMarker()),
                     TimeUnit.SECONDS.toMillis(10));
@@ -246,6 +258,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
     @Presubmit
     @Test
     public void testControl_andCancel() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             runOnUiThread(() -> {
                 setupAnimationListener();
@@ -266,6 +280,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
 
     @Test
     public void testControl_andImmediatelyCancel() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             runOnUiThread(() -> {
                 setupAnimationListener();
@@ -283,6 +299,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
     @Presubmit
     @Test
     public void testControl_immediately_show() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             setVisibilityAndWait(mType, false);
 
@@ -306,6 +324,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
     @Presubmit
     @Test
     public void testControl_immediately_hide() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             setVisibilityAndWait(mType, true);
 
@@ -329,6 +349,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
     @Presubmit
     @Test
     public void testControl_transition_show() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             setVisibilityAndWait(mType, false);
 
@@ -350,6 +372,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
     @Presubmit
     @Test
     public void testControl_transition_hide() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             setVisibilityAndWait(mType, true);
 
@@ -371,6 +395,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
     @Presubmit
     @Test
     public void testControl_transition_show_interpolator() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             mInterpolator = new DecelerateInterpolator();
             setVisibilityAndWait(mType, false);
@@ -393,6 +419,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
     @Presubmit
     @Test
     public void testControl_transition_hide_interpolator() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             mInterpolator = new AccelerateInterpolator();
             setVisibilityAndWait(mType, true);
@@ -414,6 +442,8 @@ public class WindowInsetsAnimationControllerTests extends WindowManagerTestBase 
 
     @Test
     public void testControl_andLoseControl() throws Throwable {
+        assumeFalse(isCar() && remoteInsetsControllerControlsSystemBars() && mType != ime());
+
         retryIfCancelled(() -> {
             mInterpolator = new AccelerateInterpolator();
             setVisibilityAndWait(mType, true);

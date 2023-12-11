@@ -16,6 +16,7 @@
 
 package android.content.pm.cts;
 
+import static android.Manifest.permission.GET_INTENT_SENDER_INTENT;
 import static android.Manifest.permission.INSTALL_TEST_ONLY_PACKAGE;
 import static android.content.pm.ApplicationInfo.FLAG_HAS_CODE;
 import static android.content.pm.ApplicationInfo.FLAG_INSTALLED;
@@ -41,8 +42,6 @@ import static android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
-import com.google.common.truth.Expect;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -56,6 +55,8 @@ import static org.testng.Assert.assertThrows;
 import android.annotation.NonNull;
 import android.app.Activity;
 import android.app.Instrumentation;
+import android.app.PendingIntent;
+import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -99,13 +100,15 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.core.content.FileProvider;
-import androidx.test.InstrumentationRegistry;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.rule.ServiceTestRule;
-import androidx.test.runner.AndroidJUnit4;
 
 import com.android.compatibility.common.util.PollingCheck;
 import com.android.compatibility.common.util.SystemUtil;
 import com.android.compatibility.common.util.TestUtils;
+
+import com.google.common.truth.Expect;
 
 import junit.framework.AssertionFailedError;
 
@@ -240,9 +243,9 @@ public class PackageManagerTest {
 
     @Before
     public void setup() throws Exception {
-        mContext = InstrumentationRegistry.getContext();
-        mPackageManager = mContext.getPackageManager();
         mInstrumentation = InstrumentationRegistry.getInstrumentation();
+        mContext = mInstrumentation.getContext();
+        mPackageManager = mContext.getPackageManager();
     }
 
     @After
@@ -312,8 +315,8 @@ public class PackageManagerTest {
         checkProviderInfoName(PROVIDER_NAME, providers);
     }
 
-    @Test
-    public void testEnforceIntentToMatchIntentFilter() {
+    // Disable the test due to feature revert
+    private void testEnforceIntentToMatchIntentFilter() {
         Intent intent = new Intent();
         List<ResolveInfo> results;
 
@@ -505,6 +508,81 @@ public class PackageManagerTest {
         results = mPackageManager.queryBroadcastReceivers(intent,
                 PackageManager.ResolveInfoFlags.of(0));
         assertEquals(0, results.size());
+
+        /* Pending Intent tests */
+
+        mInstrumentation.getUiAutomation().adoptShellPermissionIdentity(GET_INTENT_SENDER_INTENT);
+        var authority = INTENT_RESOLUTION_TEST_PKG_NAME + ".provider";
+        Bundle b = mContext.getContentResolver().call(authority, "", null, null);
+        assertNotNull(b);
+        PendingIntent pi = b.getParcelable("pendingIntent", PendingIntent.class);
+        assertNotNull(pi);
+        intent = pi.getIntent();
+        // It should be a non-matching intent, which cannot be resolved in our package
+        results = mPackageManager.queryIntentActivities(intent,
+            PackageManager.ResolveInfoFlags.of(0));
+        assertEquals(0, results.size());
+        // However, querying on behalf of the pending intent creator should work properly
+        results = pi.queryIntentComponents(0);
+        assertEquals(1, results.size());
+        mInstrumentation.getUiAutomation().dropShellPermissionIdentity();
+
+        intent = new Intent();
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.setComponent(
+                new ComponentName("android", "com.android.internal.app.ResolverActivity"));
+        try {
+            mContext.startActivity(intent);
+        } catch (ActivityNotFoundException ignore) {
+
+        }
+    }
+
+    @Test
+    public void testRevertEnforceIntentToMatchIntentFilter() {
+        Intent intent = new Intent();
+        List<ResolveInfo> results;
+        ComponentName comp;
+
+        /* Component explicit intent tests */
+
+        // Explicit intents with non-matching intent filter on target T+
+        intent.setAction(NON_EXISTENT_ACTION_NAME);
+        comp = new ComponentName(INTENT_RESOLUTION_TEST_PKG_NAME, ACTIVITY_NAME);
+        intent.setComponent(comp);
+        results = mPackageManager.queryIntentActivities(intent,
+                PackageManager.ResolveInfoFlags.of(0));
+        assertEquals(1, results.size());
+        comp = new ComponentName(INTENT_RESOLUTION_TEST_PKG_NAME, SERVICE_NAME);
+        intent.setComponent(comp);
+        results = mPackageManager.queryIntentServices(intent,
+                PackageManager.ResolveInfoFlags.of(0));
+        assertEquals(1, results.size());
+        comp = new ComponentName(INTENT_RESOLUTION_TEST_PKG_NAME, RECEIVER_NAME);
+        intent.setComponent(comp);
+        results = mPackageManager.queryBroadcastReceivers(intent,
+                PackageManager.ResolveInfoFlags.of(0));
+        assertEquals(1, results.size());
+
+        /* Intent selector tests */
+
+        Intent selector = new Intent();
+        selector.setPackage(INTENT_RESOLUTION_TEST_PKG_NAME);
+        intent = new Intent();
+        intent.setSelector(selector);
+
+        // Non-matching intent and matching selector
+        selector.setAction(SELECTOR_ACTION_NAME);
+        intent.setAction(NON_EXISTENT_ACTION_NAME);
+        results = mPackageManager.queryIntentActivities(intent,
+                PackageManager.ResolveInfoFlags.of(0));
+        assertEquals(1, results.size());
+        results = mPackageManager.queryIntentServices(intent,
+                PackageManager.ResolveInfoFlags.of(0));
+        assertEquals(1, results.size());
+        results = mPackageManager.queryBroadcastReceivers(intent,
+                PackageManager.ResolveInfoFlags.of(0));
+        assertEquals(1, results.size());
     }
 
     private void checkActivityInfoName(String expectedName, List<ResolveInfo> resolves) {

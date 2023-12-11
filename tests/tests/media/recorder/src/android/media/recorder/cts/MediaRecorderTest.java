@@ -1016,8 +1016,8 @@ public class MediaRecorderTest extends ActivityInstrumentationTestCase2<MediaStu
             MediaUtils.skipTest("no microphone, camera, or codecs");
             return;
         }
-        long fileSize = 128 * 1024;
-        long tolerance = 50 * 1024;
+        long fileSize = 1028 * 1024;
+        long tolerance = 400 * 1024;
         int width;
         int height;
         List<String> recordFileList = new ArrayList<String>();

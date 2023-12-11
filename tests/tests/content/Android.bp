@@ -26,6 +26,7 @@ android_test {
     // Include both the 32 and 64 bit versions
     compile_multilib: "both",
     jni_libs: [
+        "libcts_jni",
         "libnativecursorwindow_jni",
         "libnativehelper_compat_libc++",
     ],
@@ -112,7 +113,7 @@ android_test {
         ":CtsContentMaxSharedUserIdTestApp",
         ":CtsContentLongPackageNameTestApp",
         ":CtsContentNoApplicationTestApp",
-        ":CtsApkVerityTestPrebuiltFilesArm64",
+        ":CtsApkVerityTestPrebuiltFiles",
         // v1/v2/v3/v4 signed version of android.appsecurity.cts.tinyapp to keep checksums stable
         "data/CtsPkgInstallTinyAppV1.apk",
         "data/CtsPkgInstallTinyAppV2V3V4.apk",

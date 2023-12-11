@@ -25,9 +25,9 @@ import android.platform.test.annotations.AppModeFull
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
+import java.util.concurrent.TimeUnit
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.util.concurrent.TimeUnit
 
 private const val INSTALL_BUTTON_ID = "button1"
 
@@ -40,8 +40,6 @@ class InstallSourceInfoTest : PackageInstallerTestBase() {
 
     @Test
     fun installViaIntent() {
-        assumeNotWatch()
-
         val packageInstallerPackageName = getPackageInstallerPackageName()
 
         val installation = startInstallationViaIntent()
@@ -72,8 +70,6 @@ class InstallSourceInfoTest : PackageInstallerTestBase() {
     }
 
     private fun installViaSession(packageSource: Int?) {
-        assumeNotWatch()
-
         startInstallationViaSessionWithPackageSource(packageSource)
         clickInstallerUIButton(INSTALL_BUTTON_ID)
 

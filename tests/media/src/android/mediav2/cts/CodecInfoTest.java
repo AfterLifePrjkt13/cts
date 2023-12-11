@@ -27,6 +27,9 @@ import android.view.Display;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.compatibility.common.util.ApiTest;
+import com.android.compatibility.common.util.MediaUtils;
+
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Ignore;
@@ -95,9 +98,18 @@ public class CodecInfoTest {
      * default 10-bit profiles, those are excluded from this test.
      */
     @Test
+    // TODO (b/228237404) Remove the following once there is a reliable way to query HDR
+    // display capabilities at native level, till then limit the test to vendor codecs
+    @NonMediaMainlineTest
+    @ApiTest(apis = "MediaCodecInfo.CodecCapabilities#profileLevels")
     public void testHDRDisplayCapabilities() {
         Assume.assumeTrue("Test needs Android 13", IS_AT_LEAST_T);
+        Assume.assumeTrue("Test needs VNDK Android 13", VNDK_IS_AT_LEAST_T);
+        Assume.assumeTrue("Test needs First SDK Android 13", FIRST_SDK_IS_AT_LEAST_T);
         Assume.assumeTrue("Test is applicable for video codecs", mMediaType.startsWith("video/"));
+        // TODO (b/228237404) Remove the following once there is a reliable way to query HDR
+        // display capabilities at native level, till then limit the test to vendor codecs
+        Assume.assumeTrue("Test is restricted to vendor codecs", isVendorCodec(mCodecName));
 
         int[] Hdr10Profiles = mProfileHdr10Map.get(mMediaType);
         int[] Hdr10PlusProfiles = mProfileHdr10PlusMap.get(mMediaType);
@@ -151,23 +163,43 @@ public class CodecInfoTest {
 
         // COLOR_FormatSurface support is an existing requirement, but we did not
         // test for it before T.  We can not retroactively apply the higher standard to
-        // devices that are already certified, so only test on VNDK T or later devices.
-        if (VNDK_IS_AT_LEAST_T) {
+        // devices that are already certified, so only test on devices luanching with T or later.
+        if (FIRST_SDK_IS_AT_LEAST_T && VNDK_IS_AT_LEAST_T) {
             assertFalse(mCodecInfo.getName() + " does not support COLOR_FormatSurface",
                     IntStream.of(caps.colorFormats)
                             .noneMatch(x -> x == COLOR_FormatSurface));
         }
+    }
 
-        // For devices launching with Android T, if a codec supports an HDR profile, it must
-        // advertise P010 support
+    /** For devices launching with Android T or higher, if a codec supports an HDR profile and
+     * device supports HDR display, it must support COLOR_FormatYUVP010 as a video decoder output
+     * format. For TVs, this requirement is optional.
+     */
+    @Test
+    public void testP010SupportForHDRDisplay() {
+        Assume.assumeTrue("Test is applicable for video codecs", mMediaType.startsWith("video/"));
+        MediaCodecInfo.CodecCapabilities caps = mCodecInfo.getCapabilitiesForType(mMediaType);
         int[] HdrProfileArray = mProfileHdrMap.get(mMediaType);
-        if (FIRST_SDK_IS_AT_LEAST_T && HdrProfileArray != null) {
+        if (FIRST_SDK_IS_AT_LEAST_T && VNDK_IS_AT_LEAST_T && BOARD_SDK_IS_AT_LEAST_T
+                        && HdrProfileArray != null && DISPLAY_HDR_TYPES.length > 0) {
             for (CodecProfileLevel pl : caps.profileLevels) {
                 if (IntStream.of(HdrProfileArray).anyMatch(x -> x == pl.profile)) {
-                    assertFalse(mCodecInfo.getName() + " supports HDR profile " + pl.profile + "," +
-                                    " but does not support COLOR_FormatYUVP010",
-                            IntStream.of(caps.colorFormats)
-                                    .noneMatch(x -> x == COLOR_FormatYUVP010));
+                    if (MediaUtils.isTv()) {
+                        // Some TV devices support HDR10 display with VO instead of GPU. In this
+                        // case, skip checking P010 on TV devices.
+                        Assume.assumeFalse(mCodecInfo.getName() + " supports HDR profile "
+                                        + pl.profile + ","
+                                        + " but does not support COLOR_FormatYUVP010."
+                                        + " Skip checking on TV device",
+                                IntStream.of(caps.colorFormats)
+                                        .noneMatch(x -> x == COLOR_FormatYUVP010));
+                    } else {
+                        assertFalse(mCodecInfo.getName() + " supports HDR profile "
+                                        + pl.profile + "," +
+                                        " but does not support COLOR_FormatYUVP010",
+                                IntStream.of(caps.colorFormats)
+                                        .noneMatch(x -> x == COLOR_FormatYUVP010));
+                    }
                 }
             }
         }

@@ -16,6 +16,7 @@
 
 package com.android.cts.mockime;
 
+import static android.server.wm.jetpack.utils.ExtensionUtil.getWindowExtensions;
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
 import static android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
@@ -65,6 +66,7 @@ import android.view.inputmethod.InputBinding;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputContentInfo;
 import android.view.inputmethod.InputMethod;
+import android.view.inputmethod.InputMethodSubtype;
 import android.view.inputmethod.TextAttribute;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
@@ -82,6 +84,9 @@ import androidx.annotation.WorkerThread;
 import androidx.autofill.inline.UiVersions;
 import androidx.autofill.inline.UiVersions.StylesBuilder;
 import androidx.autofill.inline.v1.InlineSuggestionUi;
+import androidx.window.extensions.WindowExtensions;
+import androidx.window.extensions.layout.WindowLayoutComponent;
+import androidx.window.extensions.layout.WindowLayoutInfo;
 
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
@@ -116,6 +121,14 @@ public final class MockIme extends InputMethodService {
     static String getCommandActionName(@NonNull String eventActionName) {
         return eventActionName + ".command";
     }
+
+    @Nullable
+    private final WindowExtensions mWindowExtensions = getWindowExtensions();
+    @Nullable
+    private final WindowLayoutComponent mWindowLayoutComponent =
+            mWindowExtensions != null ? mWindowExtensions.getWindowLayoutComponent() : null;
+
+    private Consumer<WindowLayoutInfo> mWindowLayoutInfoConsumer;
 
     private final HandlerThread mHandlerThread = new HandlerThread("CommandReceiver");
 
@@ -395,6 +408,26 @@ public final class MockIme extends InputMethodService {
                                 command.getExtras().getBoolean("imeConsumesInput");
                         return getMemorizedOrCurrentInputConnection().setImeConsumesInput(
                                 imeConsumesInput);
+                    }
+                    case "switchInputMethod": {
+                        final String id = command.getExtras().getString("id");
+                        try {
+                            switchInputMethod(id);
+                        } catch (Exception e) {
+                            return e;
+                        }
+                        return ImeEvent.RETURN_VALUE_UNAVAILABLE;
+                    }
+                    case "switchInputMethod(String,InputMethodSubtype)": {
+                        final String id = command.getExtras().getString("id");
+                        final InputMethodSubtype subtype = command.getExtras().getParcelable(
+                                "subtype", InputMethodSubtype.class);
+                        try {
+                            switchInputMethod(id, subtype);
+                        } catch (Exception e) {
+                            return e;
+                        }
+                        return ImeEvent.RETURN_VALUE_UNAVAILABLE;
                     }
                     case "setBackDisposition": {
                         final int backDisposition =
@@ -692,6 +725,11 @@ public final class MockIme extends InputMethodService {
             } else {
                 registerReceiver(mCommandReceiver, filter, null /* broadcastPermission */, handler);
             }
+            // If Extension components are not loaded successfully, notify Test app.
+            if (mSettings.isWindowLayoutInfoCallbackEnabled()) {
+                getTracer().onVerify("windowLayoutComponentLoaded",
+                        () -> mWindowLayoutComponent != null);
+            }
             if (mSettings.isVerifyContextApisInOnCreate()) {
                 getTracer().onVerify("isUiContext", this::verifyIsUiContext);
                 getTracer().onVerify("getDisplay", this::verifyGetDisplay);
@@ -726,6 +764,12 @@ public final class MockIme extends InputMethodService {
             // in IME event.
             mLastDispatchedConfiguration.setTo(getResources().getConfiguration());
         });
+
+        if (mSettings.isWindowLayoutInfoCallbackEnabled() && mWindowLayoutComponent != null) {
+            mWindowLayoutInfoConsumer = (windowLayoutInfo) -> getTracer().getWindowLayoutInfo(
+                    windowLayoutInfo, () -> {});
+            mWindowLayoutComponent.addWindowLayoutInfoListener(this, mWindowLayoutInfoConsumer);
+        }
     }
 
     @Override
@@ -1060,6 +1104,9 @@ public final class MockIme extends InputMethodService {
         getTracer().onDestroy(() -> {
             mDestroying = true;
             super.onDestroy();
+            if (mSettings.isWindowLayoutInfoCallbackEnabled() && mWindowLayoutComponent != null) {
+                mWindowLayoutComponent.removeWindowLayoutInfoListener(mWindowLayoutInfoConsumer);
+            }
             unregisterReceiver(mCommandReceiver);
             mHandlerThread.quitSafely();
         });
@@ -1202,6 +1249,8 @@ public final class MockIme extends InputMethodService {
 
     @Override
     public void onConfigurationChanged(Configuration configuration) {
+        // Broadcasting configuration change is implemented at WindowProviderService level.
+        super.onConfigurationChanged(configuration);
         getTracer().onConfigurationChanged(() -> {}, configuration);
         mLastDispatchedConfiguration.setTo(configuration);
     }
@@ -1516,6 +1565,15 @@ public final class MockIme extends InputMethodService {
             arguments.putInt("ConfigUpdates", configuration.diff(
                     mIme.mLastDispatchedConfiguration));
             recordEventInternal("onConfigurationChanged", runnable, arguments);
+        }
+
+        void getWindowLayoutInfo(@NonNull WindowLayoutInfo windowLayoutInfo,
+                @NonNull Runnable runnable) {
+            final Bundle arguments = new Bundle();
+            ImeEventStreamTestUtils.WindowLayoutInfoParcelable parcel =
+                    new ImeEventStreamTestUtils.WindowLayoutInfoParcelable(windowLayoutInfo);
+            arguments.putParcelable("WindowLayoutInfo", parcel);
+            recordEventInternal("getWindowLayoutInfo", runnable, arguments);
         }
     }
 }

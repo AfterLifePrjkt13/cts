@@ -565,7 +565,7 @@ public class MultiDisplayPolicyTests extends MultiDisplayTestBase {
         mWmState.assertFocusedActivity("Top activity must be the latest launched one",
                 VIRTUAL_DISPLAY_ACTIVITY);
 
-        launchActivityOnDisplay(TEST_ACTIVITY, newDisplay.mId);
+        launchActivityOnDisplay(TEST_ACTIVITY, WINDOWING_MODE_FULLSCREEN, newDisplay.mId);
 
         waitAndAssertActivityStateOnDisplay(TEST_ACTIVITY, STATE_RESUMED, newDisplay.mId,
                 "Activity launched on secondary display must be resumed");

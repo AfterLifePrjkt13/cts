@@ -62,13 +62,25 @@ public class ImsUtils {
     public static boolean shouldTestImsService() {
         final PackageManager pm = InstrumentationRegistry.getInstrumentation().getContext()
                 .getPackageManager();
-        return pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_IMS);
+        boolean hasTelephony = pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY);
+        boolean hasIms = pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_IMS);
+        return hasTelephony && hasIms;
+    }
+
+    public static boolean shouldTestImsCall() {
+        final PackageManager pm = InstrumentationRegistry.getInstrumentation().getContext()
+                .getPackageManager();
+        return pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_IMS)
+                && pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_CALLING);
     }
 
     public static boolean shouldTestImsSingleRegistration() {
         final PackageManager pm = InstrumentationRegistry.getInstrumentation().getContext()
                 .getPackageManager();
-        return pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY_IMS_SINGLE_REGISTRATION);
+        boolean hasTelephony = pm.hasSystemFeature(PackageManager.FEATURE_TELEPHONY);
+        boolean hasSingleReg = pm.hasSystemFeature(
+                PackageManager.FEATURE_TELEPHONY_IMS_SINGLE_REGISTRATION);
+        return hasTelephony && hasSingleReg;
     }
 
     public static int getPreferredActiveSubId() {

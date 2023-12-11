@@ -2473,10 +2473,13 @@ public class MediaCodecTest extends AndroidTestCase {
                         if (encCaps != null) {
                             int bitrateMode = -1;
                             List<Integer> candidates = Arrays.asList(
-                                    EncoderCapabilities.BITRATE_MODE_VBR,
                                     EncoderCapabilities.BITRATE_MODE_CBR,
                                     EncoderCapabilities.BITRATE_MODE_CQ,
-                                    EncoderCapabilities.BITRATE_MODE_CBR_FD);
+                                    EncoderCapabilities.BITRATE_MODE_CBR_FD,
+                                    // TODO: temporary workaround;
+                                    //       isBitrateModeSupported(VBR) always returns true
+                                    //       for video encoders in Android 12/12L
+                                    EncoderCapabilities.BITRATE_MODE_VBR);
                             for (int candidate : candidates) {
                                 if (encCaps.isBitrateModeSupported(candidate)) {
                                     bitrateMode = candidate;

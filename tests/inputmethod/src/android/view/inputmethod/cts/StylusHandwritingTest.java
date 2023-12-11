@@ -53,20 +53,22 @@ import androidx.annotation.NonNull;
 import androidx.test.filters.FlakyTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 
-import com.android.compatibility.common.util.AdoptShellPermissionsRule;
+import com.android.compatibility.common.util.ApiTest;
+import com.android.compatibility.common.util.CommonTestUtils;
+import com.android.compatibility.common.util.SystemUtil;
 import com.android.cts.mockime.ImeEventStream;
 import com.android.cts.mockime.ImeSettings;
 import com.android.cts.mockime.MockImeSession;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -84,11 +86,6 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
     private int mHwInitialState;
     private boolean mShouldRestoreInitialHwState;
 
-    @Rule
-    public AdoptShellPermissionsRule mAdoptShellPermissionsRule = new AdoptShellPermissionsRule(
-            InstrumentationRegistry.getInstrumentation().getUiAutomation(),
-            Manifest.permission.WRITE_SECURE_SETTINGS);
-
     @Before
     public void setup() {
         mContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -98,8 +95,10 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
         mHwInitialState = Settings.Global.getInt(mContext.getContentResolver(),
                 STYLUS_HANDWRITING_ENABLED, SETTING_VALUE_OFF);
         if (mHwInitialState != SETTING_VALUE_ON) {
-            Settings.Global.putInt(mContext.getContentResolver(),
-                    STYLUS_HANDWRITING_ENABLED, SETTING_VALUE_ON);
+            SystemUtil.runWithShellPermissionIdentity(() -> {
+                Settings.Global.putInt(mContext.getContentResolver(),
+                        STYLUS_HANDWRITING_ENABLED, SETTING_VALUE_ON);
+            }, Manifest.permission.WRITE_SECURE_SETTINGS);
             mShouldRestoreInitialHwState = true;
         }
     }
@@ -108,8 +107,10 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
     public void tearDown() {
         if (mShouldRestoreInitialHwState) {
             mShouldRestoreInitialHwState = false;
-            Settings.Global.putInt(mContext.getContentResolver(),
-                    STYLUS_HANDWRITING_ENABLED, mHwInitialState);
+            SystemUtil.runWithShellPermissionIdentity(() -> {
+                Settings.Global.putInt(mContext.getContentResolver(),
+                        STYLUS_HANDWRITING_ENABLED, mHwInitialState);
+            }, Manifest.permission.WRITE_SECURE_SETTINGS);
         }
     }
 
@@ -147,6 +148,10 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
     }
 
     @Test
+    @ApiTest(apis = {"android.view.inputmethod.InputMethodManager#startStylusHandwriting",
+            "android.inputmethodservice.InputMethodService#onPrepareStylusHandwriting",
+            "android.inputmethodservice.InputMethodService#onStartStylusHandwriting",
+            "android.inputmethodservice.InputMethodService#onFinishStylusHandwriting"})
     public void testHandwritingStartAndFinish() throws Exception {
         final InputMethodManager imm = mContext.getSystemService(InputMethodManager.class);
         try (MockImeSession imeSession = MockImeSession.create(
@@ -157,13 +162,13 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
 
             final String marker = getTestMarker();
             final EditText editText = launchTestActivity(marker);
+            expectEvent(stream, editorMatcher("onStartInput", marker), TIMEOUT);
 
             // Touch down with a stylus
             final int x = 10;
             final int y = 10;
             TestUtils.injectStylusDownEvent(editText, x, y);
 
-            expectEvent(stream, editorMatcher("onStartInput", marker), TIMEOUT);
             notExpectEvent(
                     stream,
                     editorMatcher("onStartInputView", marker),
@@ -185,10 +190,7 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
                     editorMatcher("onStartStylusHandwriting", marker),
                     TIMEOUT);
 
-            // Verify Stylus Handwriting window is shown
-            assertTrue(expectCommand(
-                    stream, imeSession.callGetStylusHandwritingWindowVisibility(), TIMEOUT)
-                            .getReturnBooleanValue());
+            verifyStylusHandwritingWindowIsShown(stream, imeSession);
 
             // Release the stylus pointer
             TestUtils.injectStylusUpEvent(editText, x, y);
@@ -209,6 +211,9 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
      * @throws Exception
      */
     @Test
+    @ApiTest(apis = {"android.view.inputmethod.InputMethodManager#startStylusHandwriting",
+            "android.inputmethodservice.InputMethodService#onStylusMotionEvent",
+            "android.inputmethodservice.InputMethodService#onStartStylusHandwriting"})
     public void testHandwritingStylusEvents_onStylusHandwritingMotionEvent() throws Exception {
         testHandwritingStylusEvents(false /* verifyOnInkView */);
     }
@@ -219,8 +224,19 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
      * @throws Exception
      */
     @Test
+    @ApiTest(apis = {"android.view.inputmethod.InputMethodManager#startStylusHandwriting",
+            "android.inputmethodservice.InputMethodService#onStylusMotionEvent",
+            "android.inputmethodservice.InputMethodService#onStartStylusHandwriting"})
     public void testHandwritingStylusEvents_dispatchToInkView() throws Exception {
         testHandwritingStylusEvents(false /* verifyOnInkView */);
+    }
+
+    private void verifyStylusHandwritingWindowIsShown(ImeEventStream stream,
+            MockImeSession imeSession) throws InterruptedException, TimeoutException {
+        CommonTestUtils.waitUntil("Stylus handwriting window should be shown", TIMEOUT,
+                () -> expectCommand(
+                        stream, imeSession.callGetStylusHandwritingWindowVisibility(), TIMEOUT)
+                .getReturnBooleanValue());
     }
 
     private void testHandwritingStylusEvents(boolean verifyOnInkView) throws Exception {
@@ -234,6 +250,7 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
 
             final String marker = getTestMarker();
             final EditText editText = launchTestActivity(marker);
+            expectEvent(stream, editorMatcher("onStartInput", marker), TIMEOUT);
 
             final List<MotionEvent> injectedEvents = new ArrayList<>();
             // Touch down with a stylus
@@ -241,7 +258,6 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
             final int startY = 10;
             injectedEvents.add(TestUtils.injectStylusDownEvent(editText, startX, startY));
 
-            expectEvent(stream, editorMatcher("onStartInput", marker), TIMEOUT);
             notExpectEvent(
                     stream,
                     editorMatcher("onStartInputView", marker),
@@ -254,10 +270,7 @@ public class StylusHandwritingTest extends EndToEndImeTestBase {
                     editorMatcher("onStartStylusHandwriting", marker),
                     TIMEOUT);
 
-            // Verify Stylus Handwriting window is shown
-            assertTrue(expectCommand(
-                    stream, imeSession.callGetStylusHandwritingWindowVisibility(), TIMEOUT)
-                    .getReturnBooleanValue());
+            verifyStylusHandwritingWindowIsShown(stream, imeSession);
 
             if (verifyOnInkView) {
                 // Verify IME stylus Ink view receives the motion Event.

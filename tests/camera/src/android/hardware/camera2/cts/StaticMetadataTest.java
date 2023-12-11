@@ -454,6 +454,15 @@ public class StaticMetadataTest extends Camera2AndroidTestCase {
                         "Must support maximum resolution keys",
                         mStaticInfo.areMaximumResolutionKeysSupported()));
                 return;
+            case REQUEST_AVAILABLE_CAPABILITIES_SYSTEM_CAMERA:
+                if (isCapabilityAvailable) {
+                    mCollector.expectTrue("System camera shouldn't be available without" +
+                            " SYSTEM_CAMERA permissons", mAdoptShellPerm);
+                }
+                return;
+             case REQUEST_AVAILABLE_CAPABILITIES_OFFLINE_PROCESSING:
+                //Tested in OfflineSessionTest
+                return;
             default:
                 capabilityName = "Unknown";
                 assertTrue(String.format("Unknown capability set: %d", capability),

@@ -30,6 +30,7 @@ import static android.server.wm.TestTaskOrganizer.INVALID_TASK_ID;
 import static android.util.DisplayMetrics.DENSITY_DEFAULT;
 import static android.view.Display.DEFAULT_DISPLAY;
 import static android.window.DisplayAreaOrganizer.FEATURE_IME;
+import static android.window.DisplayAreaOrganizer.FEATURE_UNDEFINED;
 
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
@@ -37,6 +38,7 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 import android.app.ActivityTaskManager;
 import android.content.ComponentName;
@@ -49,6 +51,7 @@ import android.os.SystemClock;
 import android.util.SparseArray;
 import android.view.nano.DisplayInfoProto;
 import android.view.nano.ViewProtoEnums;
+import android.window.DisplayAreaOrganizer;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -62,6 +65,7 @@ import com.android.server.wm.nano.DisplayFramesProto;
 import com.android.server.wm.nano.DisplayRotationProto;
 import com.android.server.wm.nano.IdentifierProto;
 import com.android.server.wm.nano.KeyguardControllerProto;
+import com.android.server.wm.nano.KeyguardServiceDelegateProto;
 import com.android.server.wm.nano.PinnedTaskControllerProto;
 import com.android.server.wm.nano.RootWindowContainerProto;
 import com.android.server.wm.nano.TaskFragmentProto;
@@ -139,6 +143,7 @@ public class WindowManagerState {
     // Windows in z-order with the top most at the front of the list.
     private final List<WindowState> mWindowStates = new ArrayList<>();
     private KeyguardControllerState mKeyguardControllerState;
+    private KeyguardServiceDelegateState mKeyguardServiceDelegateState;
     private final List<String> mPendingActivities = new ArrayList<>();
     private int mTopFocusedTaskId = -1;
     private int mFocusedDisplayId = DEFAULT_DISPLAY;
@@ -418,6 +423,8 @@ public class WindowManagerState {
             updateForDisplayContent(display);
         }
         mKeyguardControllerState = new KeyguardControllerState(root.keyguardController);
+        mKeyguardServiceDelegateState =
+                new KeyguardServiceDelegateState(state.policy.keyguardDelegate);
         mFocusedApp = state.focusedApp;
         mFocusedDisplayId = state.focusedDisplayId;
         final DisplayContent focusedDisplay = getDisplay(mFocusedDisplayId);
@@ -453,6 +460,7 @@ public class WindowManagerState {
         mResumedActivitiesInRootTasks.clear();
         mResumedActivitiesInDisplays.clear();
         mKeyguardControllerState = null;
+        mKeyguardServiceDelegateState = null;
         mIsHomeRecentsComponent = null;
         mPendingActivities.clear();
         mDefaultPinnedStackBounds.setEmpty();
@@ -500,6 +508,15 @@ public class WindowManagerState {
                 .that(result.size()).isAtMost(1);
 
         return result.stream().findFirst().orElse(null);
+    }
+
+    public int getTaskDisplayAreaFeatureId(ComponentName activityName) {
+        final DisplayArea taskDisplayArea = getTaskDisplayArea(activityName);
+        if (taskDisplayArea != null) {
+            return taskDisplayArea.getFeatureId();
+        }
+
+        return FEATURE_UNDEFINED;
     }
 
     @Nullable
@@ -592,6 +609,10 @@ public class WindowManagerState {
 
     public KeyguardControllerState getKeyguardControllerState() {
         return mKeyguardControllerState;
+    }
+
+    public KeyguardServiceDelegateState getKeyguardServiceDelegateState() {
+        return mKeyguardServiceDelegateState;
     }
 
     public boolean containsRootTasks(int windowingMode, int activityType) {
@@ -955,6 +976,15 @@ public class WindowManagerState {
                 .collect(Collectors.toList());
     }
 
+    public boolean allActivitiesResumed() {
+        for (Task rootTask : mRootTasks) {
+            final Activity nonResumedActivity =
+                    rootTask.getActivity((a) -> !a.state.equals(STATE_RESUMED));
+            if (nonResumedActivity != null) return false;
+        }
+        return true;
+    }
+
     public boolean hasNotificationShade() {
         computeState();
         return !getMatchingWindowType(TYPE_NOTIFICATION_SHADE).isEmpty();
@@ -1204,27 +1234,23 @@ public class WindowManagerState {
             //                    don't treat them as regular root tasks
             collectDescendantsOfTypeIf(Task.class, t -> t.isRootTask(), this,
                     mRootTasks);
-            ArrayList<Task> rootOrganizedTasks = new ArrayList<>();
-            for (int i = mRootTasks.size() -1; i >= 0; --i) {
+
+            ArrayList<Task> nonOrganizedRootTasks = new ArrayList<>();
+            for (int i = 0; i < mRootTasks.size(); i++) {
                 final Task task = mRootTasks.get(i);
-                // Skip tasks created by an organizer
                 if (task.mCreatedByOrganizer) {
-                    mRootTasks.remove(task);
-                    rootOrganizedTasks.add(task);
+                    // Get all tasks inside the root-task created by an organizer
+                    List<Task> nonOrganizedDescendants = new ArrayList<>();
+                    collectDescendantsOfTypeIf(Task.class, t -> !t.mCreatedByOrganizer, task,
+                            nonOrganizedDescendants);
+                    nonOrganizedRootTasks.addAll(nonOrganizedDescendants);
+                } else {
+                    nonOrganizedRootTasks.add(task);
                 }
             }
-            // Add root tasks controlled by an organizer
-            while (rootOrganizedTasks.size() > 0) {
-                final Task task = rootOrganizedTasks.remove(0);
-                for (int i = task.mChildren.size() - 1; i >= 0; i--) {
-                    final Task child = (Task) task.mChildren.get(i);
-                    if (!child.mCreatedByOrganizer) {
-                        mRootTasks.add(child);
-                    } else {
-                        rootOrganizedTasks.add(child);
-                    }
-                }
-            }
+
+            mRootTasks.clear();
+            mRootTasks.addAll(nonOrganizedRootTasks);
         }
 
         boolean containsActivity(ComponentName activityName) {
@@ -1252,6 +1278,14 @@ public class WindowManagerState {
                     .that(result.size()).isAtMost(1);
 
             return result.stream().findFirst().orElse(null);
+        }
+
+        List<DisplayArea> getTaskDisplayAreas(ComponentName activityName) {
+            final List<DisplayArea> taskDisplayAreas = getAllTaskDisplayAreas();
+
+            return taskDisplayAreas.stream()
+                    .filter(tda -> tda.containsActivity(activityName))
+                    .collect(Collectors.toList());
         }
 
         List<DisplayArea> getAllChildDisplayAreas() {
@@ -1784,12 +1818,14 @@ public class WindowManagerState {
 
         boolean aodShowing = false;
         boolean keyguardShowing = false;
+        boolean mKeyguardGoingAway = false;
         SparseArray<Boolean> mKeyguardOccludedStates = new SparseArray<>();
 
         KeyguardControllerState(KeyguardControllerProto proto) {
             if (proto != null) {
                 aodShowing = proto.aodShowing;
                 keyguardShowing = proto.keyguardShowing;
+                mKeyguardGoingAway = proto.keyguardGoingAway;
                 for (int i = 0;  i < proto.keyguardPerDisplay.length; i++) {
                     mKeyguardOccludedStates.append(proto.keyguardPerDisplay[i].displayId,
                             proto.keyguardPerDisplay[i].keyguardOccluded);
@@ -1802,6 +1838,27 @@ public class WindowManagerState {
                 return mKeyguardOccludedStates.get(displayId);
             }
             return false;
+        }
+    }
+
+    static class KeyguardServiceDelegateState {
+
+        // copy from KeyguardServiceDelegate.java
+        private static final int INTERACTIVE_STATE_SLEEP = 0;
+        private static final int INTERACTIVE_STATE_WAKING = 1;
+        private static final int INTERACTIVE_STATE_AWAKE = 2;
+        private static final int INTERACTIVE_STATE_GOING_TO_SLEEP = 3;
+
+        private int mInteractiveState = -1;
+
+        KeyguardServiceDelegateState(KeyguardServiceDelegateProto proto) {
+            if (proto != null) {
+                mInteractiveState = proto.interactiveState;
+            }
+        }
+
+        boolean isKeyguardAwake() {
+            return mInteractiveState == INTERACTIVE_STATE_AWAKE;
         }
     }
 
@@ -1881,6 +1938,10 @@ public class WindowManagerState {
 
         public boolean isOrganized() {
             return mIsOrganized;
+        }
+
+        public Rect getAppBounds() {
+            return mFullConfiguration.windowConfiguration.getAppBounds();
         }
 
         @Override

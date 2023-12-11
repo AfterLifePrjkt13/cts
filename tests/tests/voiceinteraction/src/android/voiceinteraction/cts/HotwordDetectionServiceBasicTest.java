@@ -17,6 +17,9 @@
 package android.voiceinteraction.cts;
 
 import static android.content.pm.PackageManager.FEATURE_MICROPHONE;
+import static android.voiceinteraction.cts.testcore.VoiceInteractionDetectionHelper.perform;
+import static android.voiceinteraction.cts.testcore.VoiceInteractionDetectionHelper.performAndGetDetectionResult;
+import static android.voiceinteraction.cts.testcore.VoiceInteractionDetectionHelper.testHotwordDetection;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -24,7 +27,6 @@ import static org.junit.Assert.assertEquals;
 
 import android.app.Instrumentation;
 import android.app.compat.CompatChanges;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
@@ -44,7 +46,6 @@ import android.voiceinteraction.common.Utils;
 import android.voiceinteraction.service.EventPayloadParcelable;
 import android.voiceinteraction.service.MainHotwordDetectionService;
 
-import androidx.annotation.NonNull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.RequiresDevice;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -139,9 +140,12 @@ public final class HotwordDetectionServiceBasicTest
     @Test
     public void testHotwordDetectionService_validHotwordDetectionComponentName_triggerSuccess()
             throws Throwable {
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
+
     }
 
     @Test
@@ -157,22 +161,31 @@ public final class HotwordDetectionServiceBasicTest
         receiver.register();
 
         // Create SoftwareHotwordDetector
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         // Destroy detector
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_DESTROY_DETECTOR,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_DESTROY_DETECTOR,
                 Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         // Create AlwaysOnHotwordDetector
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         verifyDetectedResult(
-                performAndGetDetectionResult(Utils.HOTWORD_DETECTION_SERVICE_DSP_ONDETECT_TEST),
+                performAndGetDetectionResult(
+                        mActivityTestRule, mContext,
+                        Utils.HOTWORD_DETECTION_SERVICE_DSP_ONDETECT_TEST,
+                        Utils.HOTWORD_DETECTION_SERVICE_BASIC),
                 MainHotwordDetectionService.DETECTED_RESULT);
         verifyMicrophoneChip(true);
     }
@@ -180,17 +193,21 @@ public final class HotwordDetectionServiceBasicTest
     @Test
     public void testVoiceInteractionService_withoutManageHotwordDetectionPermission_triggerFailure()
             throws Throwable {
-        testHotwordDetection(Utils.VIS_WITHOUT_MANAGE_HOTWORD_DETECTION_PERMISSION_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.VIS_WITHOUT_MANAGE_HOTWORD_DETECTION_PERMISSION_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SECURITY_EXCEPTION);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SECURITY_EXCEPTION,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
     }
 
     @Test
     public void testVoiceInteractionService_holdBindHotwordDetectionPermission_triggerFailure()
             throws Throwable {
-        testHotwordDetection(Utils.VIS_HOLD_BIND_HOTWORD_DETECTION_PERMISSION_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.VIS_HOLD_BIND_HOTWORD_DETECTION_PERMISSION_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SECURITY_EXCEPTION);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SECURITY_EXCEPTION,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
     }
 
     @Test
@@ -199,12 +216,17 @@ public final class HotwordDetectionServiceBasicTest
             throws Throwable {
         Thread.sleep(CLEAR_CHIP_MS);
         // Create AlwaysOnHotwordDetector and wait the HotwordDetectionService ready
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         verifyDetectedResult(
-                performAndGetDetectionResult(Utils.HOTWORD_DETECTION_SERVICE_DSP_ONDETECT_TEST),
+                performAndGetDetectionResult(
+                        mActivityTestRule, mContext,
+                        Utils.HOTWORD_DETECTION_SERVICE_DSP_ONDETECT_TEST,
+                        Utils.HOTWORD_DETECTION_SERVICE_BASIC),
                 MainHotwordDetectionService.DETECTED_RESULT);
         verifyMicrophoneChip(true);
     }
@@ -215,11 +237,16 @@ public final class HotwordDetectionServiceBasicTest
             throws Throwable {
         Thread.sleep(CLEAR_CHIP_MS);
         // Create AlwaysOnHotwordDetector and wait the HotwordDetectionService ready
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
-        assertThat(performAndGetDetectionResult(Utils.HOTWORD_DETECTION_SERVICE_DSP_ONREJECT_TEST))
+        assertThat(performAndGetDetectionResult(
+                mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_DSP_ONREJECT_TEST,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC))
                 .isEqualTo(MainHotwordDetectionService.REJECTED_RESULT);
         verifyMicrophoneChip(false);
     }
@@ -229,13 +256,17 @@ public final class HotwordDetectionServiceBasicTest
             throws Throwable {
         Thread.sleep(CLEAR_CHIP_MS);
         // Create AlwaysOnHotwordDetector and wait the HotwordDetectionService ready
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         verifyDetectedResult(
                 performAndGetDetectionResult(
-                        Utils.HOTWORD_DETECTION_SERVICE_EXTERNAL_SOURCE_ONDETECT_TEST),
+                        mActivityTestRule, mContext,
+                        Utils.HOTWORD_DETECTION_SERVICE_EXTERNAL_SOURCE_ONDETECT_TEST,
+                        Utils.HOTWORD_DETECTION_SERVICE_BASIC),
                 MainHotwordDetectionService.DETECTED_RESULT);
         verifyMicrophoneChip(true);
     }
@@ -246,12 +277,17 @@ public final class HotwordDetectionServiceBasicTest
             throws Throwable {
         Thread.sleep(CLEAR_CHIP_MS);
         // Create SoftwareHotwordDetector and wait the HotwordDetectionService ready
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         verifyDetectedResult(
-                performAndGetDetectionResult(Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST),
+                performAndGetDetectionResult(
+                        mActivityTestRule, mContext,
+                        Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST,
+                        Utils.HOTWORD_DETECTION_SERVICE_BASIC),
                 MainHotwordDetectionService.DETECTED_RESULT);
         verifyMicrophoneChip(true);
     }
@@ -261,17 +297,23 @@ public final class HotwordDetectionServiceBasicTest
     public void testHotwordDetectionService_onStopDetection()
             throws Throwable {
         // Create SoftwareHotwordDetector and wait the HotwordDetectionService ready
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         // The HotwordDetectionService can't report any result after recognition is stopped. So
         // restart it after stopping; then the service can report a special result.
-        perform(Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST);
-        perform(Utils.HOTWORD_DETECTION_SERVICE_CALL_STOP_RECOGNITION);
+        perform(mActivityTestRule, Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
+        perform(mActivityTestRule, Utils.HOTWORD_DETECTION_SERVICE_CALL_STOP_RECOGNITION,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
         EventPayloadParcelable result =
                 (EventPayloadParcelable) performAndGetDetectionResult(
-                        Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST);
+                        mActivityTestRule, mContext,
+                        Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST,
+                        Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         verifyDetectedResult(
                 result, MainHotwordDetectionService.DETECTED_RESULT_AFTER_STOP_DETECTION);
@@ -281,9 +323,11 @@ public final class HotwordDetectionServiceBasicTest
     @RequiresDevice
     public void testHotwordDetectionService_concurrentCapture() throws Throwable {
         // Create SoftwareHotwordDetector and wait the HotwordDetectionService ready
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         SystemUtil.runWithShellPermissionIdentity(() -> {
             AudioRecord record =
@@ -305,7 +349,9 @@ public final class HotwordDetectionServiceBasicTest
                 record.startRecording();
                 verifyDetectedResult(
                         performAndGetDetectionResult(
-                                Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST),
+                                mActivityTestRule, mContext,
+                                Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST,
+                                Utils.HOTWORD_DETECTION_SERVICE_BASIC),
                         MainHotwordDetectionService.DETECTED_RESULT);
                 // TODO: Test that it still works after restarting the process or killing audio
                 //  server.
@@ -319,14 +365,18 @@ public final class HotwordDetectionServiceBasicTest
     public void testHotwordDetectionService_processDied_triggerOnError()
             throws Throwable {
         // Create AlwaysOnHotwordDetector and wait the HotwordDetectionService ready
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         // Use AlwaysOnHotwordDetector to test process died of HotwordDetectionService
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_PROCESS_DIED_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_PROCESS_DIED_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_GET_ERROR);
+                Utils.HOTWORD_DETECTION_SERVICE_GET_ERROR,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         // ActivityManager will schedule a timer to restart the HotwordDetectionService due to
         // we crash the service in this test case. It may impact the other test cases when
@@ -339,68 +389,47 @@ public final class HotwordDetectionServiceBasicTest
     @Test
     public void testHotwordDetectionService_destroyDspDetector_activeDetectorRemoved() {
         // Create AlwaysOnHotwordDetector
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_DSP_DESTROY_DETECTOR,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_DSP_DESTROY_DETECTOR,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         // Can no longer use the detector because it is in an invalid state
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_DSP_ONDETECT_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_DSP_ONDETECT_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_ILLEGAL_STATE_EXCEPTION);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_ILLEGAL_STATE_EXCEPTION,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
     }
 
     @Test
     public void testHotwordDetectionService_destroySoftwareDetector_activeDetectorRemoved() {
         // Create SoftwareHotwordDetector
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_FROM_SOFTWARE_TRIGGER_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_DESTROY_DETECTOR,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_DESTROY_DETECTOR,
                 Utils.HOTWORD_DETECTION_SERVICE_SOFTWARE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS);
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_SUCCESS,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
 
         // Can no longer use the detector because it is in an invalid state
-        testHotwordDetection(Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST,
+        testHotwordDetection(mActivityTestRule, mContext,
+                Utils.HOTWORD_DETECTION_SERVICE_MIC_ONDETECT_TEST,
                 Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_RESULT_INTENT,
-                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_ILLEGAL_STATE_EXCEPTION);
-    }
-
-    private void testHotwordDetection(int testType, String expectedIntent, int expectedResult) {
-        final BlockingBroadcastReceiver receiver = new BlockingBroadcastReceiver(mContext,
-                expectedIntent);
-        receiver.register();
-        perform(testType);
-        final Intent intent = receiver.awaitForBroadcast(TIMEOUT_MS);
-        receiver.unregisterQuietly();
-
-        assertThat(intent).isNotNull();
-        assertThat(intent.getIntExtra(Utils.KEY_TEST_RESULT, -1)).isEqualTo(expectedResult);
-    }
-
-    @NonNull
-    private Parcelable performAndGetDetectionResult(int testType) {
-        final BlockingBroadcastReceiver receiver = new BlockingBroadcastReceiver(mContext,
-                Utils.HOTWORD_DETECTION_SERVICE_ONDETECT_RESULT_INTENT);
-        receiver.register();
-        perform(testType);
-        final Intent intent = receiver.awaitForBroadcast(TIMEOUT_MS);
-        receiver.unregisterQuietly();
-
-        assertThat(intent).isNotNull();
-        final Parcelable result = intent.getParcelableExtra(Utils.KEY_TEST_RESULT);
-        assertThat(result).isNotNull();
-        return result;
-    }
-
-    private void perform(int testType) {
-        mActivityTestRule.getScenario().onActivity(
-                activity -> activity.triggerHotwordDetectionServiceTest(
-                        Utils.HOTWORD_DETECTION_SERVICE_BASIC, testType));
+                Utils.HOTWORD_DETECTION_SERVICE_TRIGGER_ILLEGAL_STATE_EXCEPTION,
+                Utils.HOTWORD_DETECTION_SERVICE_BASIC);
     }
 
     // TODO: Implement HotwordDetectedResult#equals to override the Bundle equality check; then
@@ -434,6 +463,8 @@ public final class HotwordDetectionServiceBasicTest
             // TODO ntmyren: test TV indicator
         } else if (sPkgMgr.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
             // TODO ntmyren: test Auto indicator
+        } else if (sPkgMgr.hasSystemFeature(PackageManager.FEATURE_WATCH)) {
+            // The privacy chips/indicators are not implemented on Wear
         } else {
             verifyMicrophoneChipHandheld(shouldBePresent);
         }

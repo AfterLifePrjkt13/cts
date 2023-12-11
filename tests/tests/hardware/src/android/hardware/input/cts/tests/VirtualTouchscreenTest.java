@@ -73,14 +73,16 @@ public class VirtualTouchscreenTest extends VirtualDeviceTestCase {
                 .build());
         // Convert the input axis size to its equivalent fraction of the total screen.
         final float computedSize = inputSize / (DISPLAY_WIDTH - 1f);
-        // TODO(b/216638606): Investigate why a ACTION_HOVER_ENTER event is produced
-        verifyEvents(Arrays.asList(
+
+        // There's an extraneous ACTION_HOVER_ENTER event in builds before T QPR1. We fixed the
+        // related bug (b/244744917) so the hover event is not generated anymore. In order to make
+        // the test permissive to existing and new behaviors we only verify the first 2 events here.
+        // In U we should continue to use verifyEvents().
+        verifyFirstEvents(Arrays.asList(
                 createMotionEvent(MotionEvent.ACTION_DOWN, /* x= */ x, /* y= */ y,
                         /* pressure= */ 1f, /* size= */ computedSize, /* axisSize= */ inputSize),
                 createMotionEvent(MotionEvent.ACTION_UP, /* x= */ x, /* y= */ y,
-                        /* pressure= */ 1f, /* size= */ computedSize, /* axisSize= */ inputSize),
-                createMotionEvent(MotionEvent.ACTION_HOVER_ENTER, /* x= */ 0f, /* y= */ 0f,
-                        /* pressure= */ 0f, /* size= */ 0f, /* axisSize= */ 0f)));
+                        /* pressure= */ 1f, /* size= */ computedSize, /* axisSize= */ inputSize)));
     }
 
     private MotionEvent createMotionEvent(int action, float x, float y, float pressure, float size,

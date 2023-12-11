@@ -36,7 +36,6 @@ import android.provider.DeviceConfig.NAMESPACE_APP_HIBERNATION
 import android.provider.Settings
 import android.support.test.uiautomator.By
 import android.support.test.uiautomator.BySelector
-import android.support.test.uiautomator.UiDevice
 import android.support.test.uiautomator.UiObject2
 import android.support.test.uiautomator.UiScrollable
 import android.support.test.uiautomator.UiSelector
@@ -67,6 +66,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import org.junit.Ignore
 
 /**
  * Integration test for app hibernation.
@@ -137,6 +137,7 @@ class AppHibernationIntegrationTest {
     }
 
     @Test
+    @Ignore("b/201545116")
     fun testUnusedApp_getsForceStopped() {
         withUnusedThresholdMs(TEST_UNUSED_THRESHOLD) {
             withApp(APK_PATH_S_APP, APK_PACKAGE_NAME_S_APP) {
@@ -288,6 +289,10 @@ class AppHibernationIntegrationTest {
         assumeFalse(
             "Remove permissions and free up space toggle may be unavailable on TV",
             hasFeatureTV())
+        assumeFalse(
+            "Remove permissions and free up space toggle may be unavailable on Wear",
+            hasFeatureWatch())
+
         withApp(APK_PATH_S_APP, APK_PACKAGE_NAME_S_APP) {
             // Open app info
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
@@ -297,25 +302,23 @@ class AppHibernationIntegrationTest {
             context.startActivity(intent)
 
             waitForIdle()
-            UiAutomatorUtils.getUiDevice()
 
             val packageManager = context.packageManager
             val settingsPackage = intent.resolveActivity(packageManager).packageName
             val res = packageManager.getResourcesForApplication(settingsPackage)
             val title = res.getString(
                 res.getIdentifier("unused_apps_switch", "string", settingsPackage))
-
-            // Settings can have multiple scrollable containers so all of them should be
-            // searched.
-            var toggleFound = UiDevice.getInstance(instrumentation)
-                .findObject(UiSelector().text(title))
-                .waitForExists(WAIT_TIME_MS)
-            var i = 0
-            var scrollableObject = UiScrollable(UiSelector().scrollable(true).instance(i))
-            while (!toggleFound && scrollableObject.waitForExists(WAIT_TIME_MS)) {
-                toggleFound = scrollableObject.scrollTextIntoView(title)
-                scrollableObject = UiScrollable(UiSelector().scrollable(true).instance(++i))
-            }
+                // Settings can have multiple scrollable containers so all of them should be
+                // searched.
+                var toggleFound = UiAutomatorUtils.waitFindObjectOrNull(By.text(title)) != null
+                var i = 0
+                var scrollableObject = UiScrollable(UiSelector().scrollable(true).instance(i))
+                while (!toggleFound && scrollableObject.waitForExists(WAIT_TIME_MS)) {
+                    // The following line should work for both handheld device and car settings.
+                    toggleFound = scrollableObject.scrollTextIntoView(title) ||
+                        UiAutomatorUtils.waitFindObjectOrNull(By.text(title)) != null
+                    scrollableObject = UiScrollable(UiSelector().scrollable(true).instance(++i))
+                }
 
             assertTrue("Remove permissions and free up space toggle not found", toggleFound)
         }

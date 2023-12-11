@@ -16,7 +16,10 @@
 
 package android.hardware.input.cts.tests;
 
+import static android.content.pm.PackageManager.FEATURE_FREEFORM_WINDOW_MANAGEMENT;
+
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 
 import android.app.ActivityOptions;
@@ -98,6 +101,9 @@ public abstract class VirtualDeviceTestCase extends InputTestCase {
         // Virtual input devices only operate on virtual displays
         assumeTrue(packageManager.hasSystemFeature(
                 PackageManager.FEATURE_ACTIVITIES_ON_SECONDARY_DISPLAYS));
+        // TODO(b/261155110): Re-enable tests once freeform mode is supported in Virtual Display.
+        assumeFalse("Skipping test: VirtualDisplay window policy doesn't support freeform.",
+                packageManager.hasSystemFeature(FEATURE_FREEFORM_WINDOW_MANAGEMENT));
 
         final String packageName = context.getPackageName();
         associateCompanionDevice(packageName);
@@ -198,11 +204,16 @@ public abstract class VirtualDeviceTestCase extends InputTestCase {
         final MotionEvent downEvent = MotionEvent.obtain(downTime, downTime,
                 MotionEvent.ACTION_DOWN, p.x, p.y, 0 /* metaState */);
         downEvent.setDisplayId(displayId);
-        mInstrumentation.sendPointerSync(downEvent);
         final MotionEvent upEvent = MotionEvent.obtain(downTime, SystemClock.elapsedRealtime(),
                 MotionEvent.ACTION_UP, p.x, p.y, 0 /* metaState */);
         upEvent.setDisplayId(displayId);
-        mInstrumentation.sendPointerSync(upEvent);
+
+        try {
+            mInstrumentation.sendPointerSync(downEvent);
+            mInstrumentation.sendPointerSync(upEvent);
+        } catch (IllegalArgumentException e) {
+            fail("Failed to sending taps to the activity. Is the device unlocked?");
+        }
 
         verifyEvents(ImmutableList.of(downEvent, upEvent));
     }

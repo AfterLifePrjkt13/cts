@@ -19,13 +19,13 @@ import android.app.AppOpsManager.MODE_ALLOWED
 import android.content.Intent
 import android.platform.test.annotations.AppModeFull
 import android.provider.Settings
-import androidx.test.InstrumentationRegistry
-import androidx.test.filters.MediumTest
-import androidx.test.runner.AndroidJUnit4
 import android.support.test.uiautomator.By
 import android.support.test.uiautomator.BySelector
 import android.support.test.uiautomator.UiDevice
 import android.support.test.uiautomator.Until
+import androidx.test.InstrumentationRegistry
+import androidx.test.filters.MediumTest
+import androidx.test.runner.AndroidJUnit4
 import com.android.compatibility.common.util.AppOpsUtils
 import com.google.common.truth.Truth.assertThat
 import org.junit.Assert.assertNotNull
@@ -75,13 +75,11 @@ class ExternalSourcesTestAppOpAllowed : PackageInstallerTestBase() {
 
     @Test
     fun allowedSourceTestViaIntent() {
-        assumeNotWatch()
         allowedSourceTest { startInstallationViaIntent() }
     }
 
     @Test
     fun allowedSourceTestViaSession() {
-        assumeNotWatch()
         allowedSourceTest { startInstallationViaSession() }
     }
 

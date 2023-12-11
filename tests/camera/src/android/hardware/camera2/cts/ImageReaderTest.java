@@ -59,12 +59,14 @@ import android.media.Image;
 import android.media.Image.Plane;
 import android.media.ImageReader;
 import android.media.ImageWriter;
+import android.os.Build;
 import android.os.SystemClock;
 import android.os.ConditionVariable;
 import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
 
+import com.android.compatibility.common.util.PropertyUtil;
 import com.android.ex.camera2.blocking.BlockingSessionCallback;
 
 import org.junit.Test;
@@ -1453,6 +1455,16 @@ public class ImageReaderTest extends Camera2AndroidTestCase {
             // TODO: Update this to use availableResultKeys once shim supports this.
             if (mStaticInfo.isCapabilitySupported(
                     CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_READ_SENSOR_SETTINGS)) {
+                StaticMetadata staticInfo = mStaticInfo;
+                boolean supportActivePhysicalIdConsistency =
+                        PropertyUtil.getFirstApiLevel() >= Build.VERSION_CODES.S;
+                if (mStaticInfo.isLogicalMultiCamera() && supportActivePhysicalIdConsistency
+                        && mStaticInfo.isActivePhysicalCameraIdSupported()) {
+                    String activePhysicalId =
+                            result.get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID);
+                    staticInfo = mAllStaticInfo.get(activePhysicalId);
+                }
+
                 Long exposureTime = getValueNotNull(result, CaptureResult.SENSOR_EXPOSURE_TIME);
                 Integer sensitivity = getValueNotNull(result, CaptureResult.SENSOR_SENSITIVITY);
                 mCollector.expectInRange(
@@ -1460,15 +1472,15 @@ public class ImageReaderTest extends Camera2AndroidTestCase {
                                 "Capture for format %d, size %s exposure time is invalid.",
                                 format, size.toString()),
                         exposureTime,
-                        mStaticInfo.getExposureMinimumOrDefault(),
-                        mStaticInfo.getExposureMaximumOrDefault()
+                        staticInfo.getExposureMinimumOrDefault(),
+                        staticInfo.getExposureMaximumOrDefault()
                 );
                 mCollector.expectInRange(
                         String.format("Capture for format %d, size %s sensitivity is invalid.",
                                 format, size.toString()),
                         sensitivity,
-                        mStaticInfo.getSensitivityMinimumOrDefault(),
-                        mStaticInfo.getSensitivityMaximumOrDefault()
+                        staticInfo.getSensitivityMinimumOrDefault(),
+                        staticInfo.getSensitivityMaximumOrDefault()
                 );
             }
             // TODO: add more key validations.

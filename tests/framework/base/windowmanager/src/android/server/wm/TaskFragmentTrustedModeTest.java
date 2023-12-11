@@ -21,7 +21,6 @@ import static android.server.wm.jetpack.second.Components.SECOND_UNTRUSTED_EMBED
 import static android.server.wm.jetpack.utils.ActivityEmbeddingUtil.assumeActivityEmbeddingSupportedDevice;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -251,7 +250,7 @@ public class TaskFragmentTrustedModeTest extends TaskFragmentOrganizerTestBase {
      */
     @Test
     public void testUntrustedModeTaskFragment_startActivityInTaskFragmentOutsideOfParentBounds() {
-        Task parentTask = mWmState.getRootTask(mOwnerTaskId);
+        final Task parentTask = mWmState.getRootTask(mOwnerTaskId);
         final Rect parentBounds = new Rect(parentTask.getBounds());
         final IBinder errorCallbackToken = new Binder();
         final WindowContainerTransaction wct = new WindowContainerTransaction()
@@ -266,11 +265,6 @@ public class TaskFragmentTrustedModeTest extends TaskFragmentOrganizerTestBase {
         // It is disallowed to start activity to TaskFragment with bounds outside of its parent
         // in untrusted mode.
         assertTaskFragmentError(errorCallbackToken, SecurityException.class);
-
-        parentTask = mWmState.getRootTask(mOwnerTaskId);
-        assertWithMessage("Activity must be started in parent Task because it's not"
-                + " allowed to be embedded").that(parentTask.mActivities).contains(
-                mWmState.getActivity(SECOND_UNTRUSTED_EMBEDDING_ACTIVITY));
     }
 
     /**

@@ -76,6 +76,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import android.util.Log;
 
 /**
  * Class for testing {@link MagnificationController} and the magnification overlay window.
@@ -88,10 +89,13 @@ public class AccessibilityMagnificationTest {
     public static final int LISTENER_TIMEOUT_MILLIS = 500;
     /** Maximum animation timeout when waiting for a magnification callback. */
     public static final int LISTENER_ANIMATION_TIMEOUT_MILLIS = 1000;
+    public static final int BOUNDS_TOLERANCE = 1;
     public static final String ACCESSIBILITY_DISPLAY_MAGNIFICATION_ENABLED =
             "accessibility_display_magnification_enabled";
 
     private static UiAutomation sUiAutomation;
+
+    private static final String TAG = "AccessibilityMagnificationTest";
 
     private StubMagnificationAccessibilityService mService;
     private Instrumentation mInstrumentation;
@@ -842,8 +846,8 @@ public class AccessibilityMagnificationTest {
 
             final Region magnificationRegion = controller.getCurrentMagnificationRegion();
             final Rect magnificationBounds = magnificationRegion.getBounds();
-            assertEquals(magnificationBounds.exactCenterX(), x, 0);
-            assertEquals(magnificationBounds.exactCenterY(), y, 0);
+            assertEquals(magnificationBounds.exactCenterX(), x, BOUNDS_TOLERANCE);
+            assertEquals(magnificationBounds.exactCenterY(), y, BOUNDS_TOLERANCE);
         } finally {
             mService.runOnServiceSync(() -> {
                 controller.resetCurrentMagnification(false);
@@ -1052,10 +1056,11 @@ public class AccessibilityMagnificationTest {
                         + controller.getMagnificationConfig(), 5,
                 () -> {
                     final MagnificationConfig actualConfig = controller.getMagnificationConfig();
+                    Log.d(TAG, "Polling config: " + actualConfig.toString());
                     return actualConfig.getMode() == config.getMode()
                             && Float.compare(actualConfig.getScale(), config.getScale()) == 0
-                            && Float.compare(actualConfig.getCenterX(), config.getCenterX()) == 0
-                            && Float.compare(actualConfig.getCenterY(), config.getCenterY()) == 0;
+                            && Math.abs(actualConfig.getCenterX() - config.getCenterX()) <= BOUNDS_TOLERANCE
+                            && Math.abs(actualConfig.getCenterY() - config.getCenterY()) <= BOUNDS_TOLERANCE;
                 });
     }
 

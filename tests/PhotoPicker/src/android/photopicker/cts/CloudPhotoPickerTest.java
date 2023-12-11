@@ -52,6 +52,7 @@ import androidx.test.uiautomator.UiObject;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -103,9 +104,13 @@ public class CloudPhotoPickerTest extends PhotoPickerBaseTest {
         for (Uri uri : mUriList) {
             deleteMedia(uri, mContext);
         }
-        mActivity.finish();
+        if (mActivity != null) {
+            mActivity.finish();
+        }
         mUriList.clear();
-        setCloudProvider(mContext, null);
+        if (mCloudPrimaryMediaGenerator != null) {
+            setCloudProvider(mContext, null);
+        }
     }
 
     @Test
@@ -275,6 +280,7 @@ public class CloudPhotoPickerTest extends PhotoPickerBaseTest {
     }
 
     @Test
+    @Ignore("Ignored in Android T becauase this changed between T and U")
     public void testUriAccessWithInvalidProjection() throws Exception {
         initPrimaryCloudProviderWithImage(Pair.create(null, CLOUD_ID1));
 
@@ -286,8 +292,8 @@ public class CloudPhotoPickerTest extends PhotoPickerBaseTest {
         final ContentResolver resolver = mContext.getContentResolver();
 
         assertThrows(IllegalArgumentException.class, () -> resolver.query(
-                        clipData.getItemAt(0).getUri(),
-                        new String[] {MediaStore.MediaColumns.RELATIVE_PATH}, null, null));
+            clipData.getItemAt(0).getUri(),
+            new String[] {MediaStore.MediaColumns.RELATIVE_PATH}, null, null));
     }
 
     @Test

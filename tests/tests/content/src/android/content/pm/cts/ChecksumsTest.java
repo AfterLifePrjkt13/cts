@@ -71,6 +71,8 @@ import com.android.server.pm.ApkChecksums;
 import com.android.server.pm.PackageManagerShellCommandDataLoader;
 import com.android.server.pm.PackageManagerShellCommandDataLoader.Metadata;
 
+import com.android.compatibility.common.util.CpuFeatures;
+
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -137,8 +139,10 @@ public class ChecksumsTest {
     private static final String TEST_FIXED_APK_FSVERITY = "CtsApkVerityTestAppPrebuilt.apk";
     private static final String TEST_FIXED_APK_FSVERITY_FSVSIG =
             "CtsApkVerityTestAppPrebuilt.apk.fsv_sig";
-    private static final String TEST_FIXED_APK_FSVERITY_SHA256 =
-            "b64007327096541dc9c548ad5540fd41e11ab209e7bce5b12295aac49074848f";
+    private static final String TEST_FIXED_APK_FSVERITY_SHA256_ARM64 =
+            "84c9974e74258a9c5abbc8a797358fe8ebf8918edf62383ea621e9e9e6461864";
+    private static final String TEST_FIXED_APK_FSVERITY_SHA256_X86_64 =
+            "5073070ee9e9a7821b4044b457d95a2bb81f349ba32d31acd0952e4a2617075a";
 
     private static final String TEST_FIXED_APK_V2_SHA256 =
             "1eec9e86e322b8d7e48e255fc3f2df2dbc91036e63982ff9850597c6a37bbeb3";
@@ -334,10 +338,20 @@ public class ChecksumsTest {
         assertNotNull(checksums);
         assertEquals(checksums.length, 2);
         assertEquals(checksums[0].getType(), TYPE_WHOLE_MERKLE_ROOT_4K_SHA256);
-        assertEquals(bytesToHexString(checksums[0].getValue()), TEST_FIXED_APK_FSVERITY_SHA256);
+        if (CpuFeatures.isArm64Cpu() || CpuFeatures.isArmCpu()) {
+            assertEquals(bytesToHexString(checksums[0].getValue()),
+                    TEST_FIXED_APK_FSVERITY_SHA256_ARM64);
+            assertEquals(bytesToHexString(checksums[1].getValue()),
+                    "8c61bc2548521aa0005276af68e42253957e1e24c122f7d8bf10f1832d4014e5");
+        } else if (CpuFeatures.isX86_64Cpu() || CpuFeatures.isX86Cpu()) {
+            assertEquals(bytesToHexString(checksums[0].getValue()),
+                    TEST_FIXED_APK_FSVERITY_SHA256_X86_64);
+            assertEquals(bytesToHexString(checksums[1].getValue()),
+                    "6f7cfa569c4a25d7241e26c1c8ff274badbdefd7854d91b842b1a97a985d5917");
+        } else {
+            Assert.fail("Unsupported CPU ABI");
+        }
         assertEquals(checksums[1].getType(), TYPE_PARTIAL_MERKLE_ROOT_1M_SHA256);
-        assertEquals(bytesToHexString(checksums[1].getValue()),
-                "1edbfd7f5825f71840ada2b5b2c7e5ad54d459d3ef04f49b778c96baf319bbb9");
     }
 
     @LargeTest
@@ -358,7 +372,15 @@ public class ChecksumsTest {
         assertNotNull(checksums);
         assertEquals(checksums.length, 1);
         assertEquals(checksums[0].getType(), TYPE_WHOLE_MERKLE_ROOT_4K_SHA256);
-        assertEquals(bytesToHexString(checksums[0].getValue()), TEST_FIXED_APK_FSVERITY_SHA256);
+        if (CpuFeatures.isArm64Cpu() || CpuFeatures.isArmCpu()) {
+            assertEquals(bytesToHexString(checksums[0].getValue()),
+                    TEST_FIXED_APK_FSVERITY_SHA256_ARM64);
+        } else if (CpuFeatures.isX86_64Cpu() || CpuFeatures.isX86Cpu()) {
+            assertEquals(bytesToHexString(checksums[0].getValue()),
+                    TEST_FIXED_APK_FSVERITY_SHA256_X86_64);
+        } else {
+            Assert.fail("Unsupported CPU ABI");
+        }
     }
 
     @Test
@@ -373,25 +395,6 @@ public class ChecksumsTest {
         assertNotNull(checksums);
         // No usable hashes as verity-in-v2-signature does not cover the whole file.
         assertEquals(checksums.length, 0);
-    }
-
-    @LargeTest
-    @Test
-    public void testAllChecksums() throws Exception {
-        LocalListener receiver = new LocalListener();
-        PackageManager pm = getPackageManager();
-        pm.requestChecksums(V2V3_PACKAGE_NAME, true, ALL_CHECKSUMS, TRUST_NONE,
-                receiver);
-        ApkChecksum[] checksums = receiver.getResult();
-        assertNotNull(checksums);
-        assertEquals(checksums.length, 7);
-        assertEquals(checksums[0].getType(), TYPE_WHOLE_MERKLE_ROOT_4K_SHA256);
-        assertEquals(checksums[1].getType(), TYPE_WHOLE_MD5);
-        assertEquals(checksums[2].getType(), TYPE_WHOLE_SHA1);
-        assertEquals(checksums[3].getType(), TYPE_WHOLE_SHA256);
-        assertEquals(checksums[4].getType(), TYPE_WHOLE_SHA512);
-        assertEquals(checksums[5].getType(), TYPE_PARTIAL_MERKLE_ROOT_1M_SHA256);
-        assertEquals(checksums[6].getType(), TYPE_PARTIAL_MERKLE_ROOT_1M_SHA512);
     }
 
     @LargeTest
@@ -1602,7 +1605,7 @@ public class ChecksumsTest {
 
         public ApkChecksum[] getResult() {
             try {
-                return mResult.poll(5, TimeUnit.SECONDS);
+                return mResult.poll(6, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }

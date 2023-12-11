@@ -74,11 +74,13 @@ import com.android.compatibility.common.util.MediaUtils;
 import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface;
 import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible;
 import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUVP010;
+import static android.media.MediaCodecInfo.CodecCapabilities.FEATURE_HdrEditing;
 import static android.media.MediaCodecInfo.CodecProfileLevel.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 class CodecAsyncHandler extends MediaCodec.Callback {
     private static final String LOG_TAG = CodecAsyncHandler.class.getSimpleName();
@@ -600,6 +602,9 @@ abstract class CodecTestBase {
             ApiLevelUtil.isFirstApiAfter(Build.VERSION_CODES.S_V2);
     public static final boolean VNDK_IS_AT_LEAST_T =
             SystemProperties.getInt("ro.vndk.version", 0) > Build.VERSION_CODES.S_V2;
+    public static final boolean BOARD_SDK_IS_AT_LEAST_T =
+            SystemProperties.getInt("ro.board.api_level", 0) > Build.VERSION_CODES.S_V2;
+    public static final boolean IS_HDR_EDITING_SUPPORTED = isHDREditingSupported();
     private static final String LOG_TAG = CodecTestBase.class.getSimpleName();
     enum SupportClass {
         CODEC_ALL, // All codecs must support
@@ -843,6 +848,22 @@ abstract class CodecTestBase {
         boolean isSupported = codecCapabilities.isFeatureSupported(feature);
         codec.release();
         return isSupported;
+    }
+
+    static boolean isHDREditingSupported() {
+        MediaCodecList mcl = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+        for (MediaCodecInfo codecInfo : mcl.getCodecInfos()) {
+            if (!codecInfo.isEncoder()) {
+                continue;
+            }
+            for (String mediaType : codecInfo.getSupportedTypes()) {
+                CodecCapabilities caps = codecInfo.getCapabilitiesForType(mediaType);
+                if (caps != null && caps.isFeatureSupported(FEATURE_HdrEditing)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     static boolean doesAnyFormatHaveHDRProfile(String mime, ArrayList<MediaFormat> formats) {
@@ -1532,6 +1553,16 @@ class CodecDecoderTestBase extends CodecTestBase {
                     if (selectHBD && (format.getInteger(MediaFormat.KEY_COLOR_FORMAT) !=
                             COLOR_FormatYUVP010)) {
                         mSkipChecksumVerification = true;
+                    }
+
+                    if ((format.getInteger(MediaFormat.KEY_COLOR_FORMAT) != COLOR_FormatYUVP010)
+                            && selectHBD && mSurface == null) {
+                        // Codecs that do not advertise P010 on devices with VNDK version < T, do
+                        // not support decoding high bit depth clips when color format is set to
+                        // COLOR_FormatYUV420Flexible in byte buffer mode. Since byte buffer mode
+                        // for high bit depth decoding wasn't tested prior to Android T, skip this
+                        // when device is older
+                        assumeTrue("Skipping High Bit Depth tests on VNDK < T", VNDK_IS_AT_LEAST_T);
                     }
                 }
                 // TODO: determine this from the extractor format when it becomes exposed.

@@ -42,6 +42,8 @@ import android.telecom.cts.thirdptyincallservice.CtsThirdPartyInCallServiceContr
 import android.telecom.cts.thirdptyincallservice.ICtsThirdPartyInCallServiceControl;
 import android.util.Log;
 
+import com.android.compatibility.common.util.FeatureUtil;
+
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -265,6 +267,10 @@ public class SelfManagedConnectionTest extends BaseTelecomTestWithMockServices {
         if (!mShouldTestTelecom) {
             return;
         }
+        // carMode is not supported in Wear OS
+        if (FeatureUtil.isWatch()) {
+            return;
+        }
         TestServiceConnection controlConn = setUpControl(CAR_MODE_CONTROL,
                 CAR_DIALER_1);
         mCarModeIncallServiceControlOne = ICtsCarModeInCallServiceControl.Stub
@@ -326,6 +332,10 @@ public class SelfManagedConnectionTest extends BaseTelecomTestWithMockServices {
         if (!mShouldTestTelecom) {
             return;
         }
+        // carMode is not supported in Wear OS
+        if (FeatureUtil.isWatch()) {
+            return;
+        }
         TestServiceConnection controlConn1 = setUpControl(CAR_MODE_CONTROL, CAR_DIALER_1);
         TestServiceConnection controlConn2 = setUpControl(CAR_MODE_CONTROL, CAR_DIALER_2);
         mCarModeIncallServiceControlOne = ICtsCarModeInCallServiceControl.Stub
@@ -358,6 +368,10 @@ public class SelfManagedConnectionTest extends BaseTelecomTestWithMockServices {
 
     public void testExitCarMode() throws Exception {
         if (!mShouldTestTelecom) {
+            return;
+        }
+        // carMode is not supported in Wear OS
+        if (FeatureUtil.isWatch()) {
             return;
         }
         TestServiceConnection controlConn = setUpControl(CAR_MODE_CONTROL, CAR_DIALER_1);

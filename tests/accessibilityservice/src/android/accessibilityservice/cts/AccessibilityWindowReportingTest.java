@@ -16,6 +16,7 @@
 
 package android.accessibilityservice.cts;
 
+import static android.accessibilityservice.cts.utils.AccessibilityEventFilterUtils.filterWaitForAll;
 import static android.accessibilityservice.cts.utils.AccessibilityEventFilterUtils.filterWindowsChangeTypesAndWindowTitle;
 import static android.accessibilityservice.cts.utils.AccessibilityEventFilterUtils.filterWindowsChangedWithChangeTypes;
 import static android.accessibilityservice.cts.utils.ActivityLaunchUtils.findWindowByTitle;
@@ -431,15 +432,21 @@ public class AccessibilityWindowReportingTest {
             intent.setAction(NotTouchableWindowTestActivity.ADD_WINDOW);
 
             try {
-                // Waits for the not-touchable activity is covered by the untrusted window.
-                sUiAutomation.executeAndWaitForEvent(() -> sInstrumentation.runOnMainSync(
-                        () -> sInstrumentation.getContext().sendBroadcast(intent)),
-                        (event) -> {
-                            final AccessibilityWindowInfo notTouchableWindow =
-                                    findWindowByTitle(sUiAutomation,
-                                            NotTouchableWindowTestActivity.TITLE);
-                            return notTouchableWindow == null;
-                        }, TIMEOUT_ASYNC_PROCESSING);
+                // Waits for two events, whose order is nondeterministic:
+                //  (1) the test activity is covered by the untrusted non-touchable window.
+                //  (2) the untrusted non-touchable window is added.
+                sendIntentAndWaitForEvent(intent,
+                        filterWaitForAll(
+                                event -> {
+                                    final AccessibilityWindowInfo coveredWindow =
+                                            findWindowByTitle(sUiAutomation,
+                                                    NotTouchableWindowTestActivity.TITLE);
+                                    return coveredWindow == null;
+                                },
+                                filterWindowsChangeTypesAndWindowTitle(sUiAutomation,
+                                        WINDOWS_CHANGE_ADDED,
+                                        NotTouchableWindowTestActivity.NON_TOUCHABLE_WINDOW_TITLE)
+                        ));
             } finally {
                 intent.setAction(NotTouchableWindowTestActivity.REMOVE_WINDOW);
                 sendIntentAndWaitForEvent(intent,
@@ -468,7 +475,7 @@ public class AccessibilityWindowReportingTest {
                     sendIntentAndWaitForEvent(intent,
                             filterWindowsChangeTypesAndWindowTitle(sUiAutomation,
                                     WINDOWS_CHANGE_ADDED,
-                                    NotTouchableWindowTestActivity.NON_TOUCHABLE_WINDOW_TITLE.toString())
+                                    NotTouchableWindowTestActivity.NON_TOUCHABLE_WINDOW_TITLE)
                     );
                 }, Manifest.permission.INTERNAL_SYSTEM_WINDOW);
 

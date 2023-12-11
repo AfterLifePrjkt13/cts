@@ -25,7 +25,6 @@ import static android.accessibilityservice.cts.utils.GestureUtils.IS_ACTION_POIN
 import static android.accessibilityservice.cts.utils.GestureUtils.IS_ACTION_POINTER_UP;
 import static android.accessibilityservice.cts.utils.GestureUtils.IS_ACTION_UP;
 import static android.accessibilityservice.cts.utils.GestureUtils.add;
-import static android.accessibilityservice.cts.utils.GestureUtils.ceil;
 import static android.accessibilityservice.cts.utils.GestureUtils.click;
 import static android.accessibilityservice.cts.utils.GestureUtils.diff;
 import static android.accessibilityservice.cts.utils.GestureUtils.dispatchGesture;
@@ -56,11 +55,11 @@ import android.accessibilityservice.GestureDescription.StrokeDescription;
 import android.accessibilityservice.cts.activities.AccessibilityTestActivity;
 import android.app.Instrumentation;
 import android.app.UiAutomation;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Matrix;
 import android.graphics.Path;
 import android.graphics.PointF;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.platform.test.annotations.AppModeFull;
@@ -69,7 +68,6 @@ import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
-import android.view.WindowManager;
 import android.widget.TextView;
 
 import androidx.test.rule.ActivityTestRule;
@@ -87,8 +85,6 @@ import org.junit.runner.RunWith;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import android.graphics.Rect;
 
 /**
  * Verify that gestures dispatched from an accessibility service show up in the current UI
@@ -196,7 +192,8 @@ public class AccessibilityGestureDispatchTest {
         // Verify other MotionEvent fields in this test to make sure they get initialized.
         assertEquals(0, clickDown.getActionIndex());
         assertEquals(VIRTUAL_KEYBOARD, clickDown.getDeviceId());
-        assertEquals(MotionEvent.FLAG_IS_ACCESSIBILITY_EVENT, clickDown.getFlags());
+        assertEquals(MotionEvent.FLAG_IS_ACCESSIBILITY_EVENT,
+                clickDown.getFlags() & MotionEvent.FLAG_IS_ACCESSIBILITY_EVENT);
         assertEquals(0, clickDown.getEdgeFlags());
         assertEquals(1F, clickDown.getXPrecision(), 0F);
         assertEquals(1F, clickDown.getYPrecision(), 0F);

@@ -18,6 +18,7 @@ package android.hardware.input.cts.tests;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -249,7 +250,29 @@ public abstract class InputTestCase {
         failWithMessage("extraneous events generated: " + event);
     }
 
+    /** Waits for an event, and consumes it if it is a MotionEvent with ACTION_HOVER_ENTER. */
+    protected void maybeConsumeHoverEnter() {
+        PollingCheck.waitFor(1000 /* timeout */, () -> mEvents.peek() != null,
+                "Failed to receive input event");
+        final InputEvent event = mEvents.peek();
+        assertNotNull(event);
+        if (event instanceof MotionEvent
+                && ((MotionEvent) event).getActionMasked() == MotionEvent.ACTION_HOVER_ENTER) {
+            try {
+                // Consume the event
+                mEvents.take();
+            } catch (InterruptedException e) {
+                throw new IllegalStateException("Unexpected interruption: ", e);
+            }
+        }
+    }
+
     protected void verifyEvents(List<InputEvent> events) {
+        verifyFirstEvents(events);
+        assertNoMoreEvents();
+    }
+
+    protected void verifyFirstEvents(List<InputEvent> events) {
         // Make sure we received the expected input events
         if (events.size() == 0) {
             // If no event is expected we need to wait for event until timeout and fail on
@@ -276,7 +299,6 @@ public abstract class InputTestCase {
             }
             fail("Entry " + i + " is neither a KeyEvent nor a MotionEvent: " + event);
         }
-        assertNoMoreEvents();
     }
 
     private InputEvent waitForEvent() {

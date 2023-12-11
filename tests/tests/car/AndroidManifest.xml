@@ -25,6 +25,7 @@
     <uses-permission android:name="android.car.permission.CAR_SPEED" />
     <uses-permission android:name="android.car.permission.CONTROL_CAR_DISPLAY_UNITS" />
     <uses-permission android:name="android.car.permission.READ_CAR_DISPLAY_UNITS" />
+    <uses-permission android:name="android.car.permission.CAR_TEST_SERVICE" />
     <uses-permission android:name="android.car.permission.READ_CAR_POWER_POLICY" />
     <uses-permission android:name="android.car.permission.USE_CAR_TELEMETRY_SERVICE" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
@@ -45,6 +46,12 @@
         <activity android:name=".drivingstate.NonDistractionOptimizedActivity">
             <meta-data android:name="distractionOptimized" android:value="false"/>
         </activity>
+
+        <!-- Setting the car target version to TIRAMISU_1 to allow tests checking car target version
+             to pass, e.g.
+             CarServiceHelperServiceUpdatableTest#testSendUserLifecycleEventAndOnUserCreated,
+             CarServiceHelperServiceUpdatableTest#testSendUserLifecycleEventAndOnUserRemoved -->
+        <meta-data android:name="android.car.targetCarVersion" android:value="33:1"/>
     </application>
 
     <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner"

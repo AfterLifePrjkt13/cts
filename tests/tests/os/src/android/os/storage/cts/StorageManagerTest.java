@@ -310,7 +310,9 @@ public class StorageManagerTest extends AndroidTestCase {
         Log.d(TAG, "testGetStorageVolumeUSB#volumeName: " + volumeName);
         List<StorageVolume> storageVolumes = mStorageManager.getStorageVolumes();
         Optional<StorageVolume> usbStorageVolume =
-                storageVolumes.stream().filter(sv->sv.getPath().contains(volumeName)).findFirst();
+                storageVolumes.stream().filter(sv->
+                sv != null && sv.getPath() != null && sv.getPath().contains(volumeName)
+            ).findFirst();
         assertTrue("The USB storage volume mounted on the main user is not present in "
                 + storageVolumes.stream().map(StorageVolume::getPath)
                 .collect(joining("\n")), usbStorageVolume.isPresent());
@@ -322,7 +324,9 @@ public class StorageManagerTest extends AndroidTestCase {
         Log.d(TAG, "testGetStorageVolumeSDCard#volumeName: " + volumeName);
         List<StorageVolume> storageVolumes = mStorageManager.getStorageVolumes();
         Optional<StorageVolume> sdCardStorageVolume =
-                storageVolumes.stream().filter(sv->sv.getPath().contains(volumeName)).findFirst();
+                storageVolumes.stream().filter(sv->
+                sv != null && sv.getPath() != null && sv.getPath().contains(volumeName)
+            ).findFirst();
         assertTrue("The SdCard storage volume mounted on the main user is not present in "
                         + storageVolumes.stream().map(StorageVolume::getPath)
                         .collect(joining("\n")), sdCardStorageVolume.isPresent());
@@ -381,7 +385,7 @@ public class StorageManagerTest extends AndroidTestCase {
         mStorageManager.registerStorageVolumeCallback(mContext.getMainExecutor(), callback);
         InstrumentationRegistry.getInstrumentation().getUiAutomation()
                 .executeShellCommand("sm unmount emulated;" + UserHandle.myUserId());
-        assertTrue(unmounted.await(15, TimeUnit.SECONDS));
+        assertTrue(unmounted.await(30, TimeUnit.SECONDS));
 
         // Now unregister and verify we don't hear future events
         mStorageManager.unregisterStorageVolumeCallback(callback);

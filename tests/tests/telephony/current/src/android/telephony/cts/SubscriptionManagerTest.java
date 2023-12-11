@@ -33,6 +33,7 @@ import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 import android.annotation.Nullable;
+import android.app.AppOpsManager;
 import android.app.UiAutomation;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -49,6 +50,7 @@ import android.net.Uri;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.os.PersistableBundle;
+import android.os.Process;
 import android.telephony.CarrierConfigManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -63,6 +65,7 @@ import android.util.Log;
 
 import androidx.test.InstrumentationRegistry;
 
+import com.android.compatibility.common.util.ApiTest;
 import com.android.compatibility.common.util.CarrierPrivilegeUtils;
 import com.android.compatibility.common.util.PropertyUtil;
 import com.android.compatibility.common.util.ShellIdentityUtils;
@@ -670,6 +673,7 @@ public class SubscriptionManagerTest {
     }
 
     @Test
+    @ApiTest(apis = "android.telephony.SubscriptionManager#getSubscriptionsInGroup")
     public void testSubscriptionGroupingWithPermission() throws Exception {
         // Set subscription group with current sub Id.
         List<Integer> subGroup = new ArrayList();
@@ -680,8 +684,14 @@ public class SubscriptionManagerTest {
         // Getting subscriptions in group.
         List<SubscriptionInfo> infoList = mSm.getSubscriptionsInGroup(uuid);
         assertNotNull(infoList);
+        assertTrue(infoList.isEmpty());
+
+        // has the READ_PRIVILEGED_PHONE_STATE permission
+        infoList = ShellIdentityUtils.invokeMethodWithShellPermissions(mSm,
+                (sm) -> sm.getSubscriptionsInGroup(uuid), READ_PRIVILEGED_PHONE_STATE);
+        assertNotNull(infoList);
         assertEquals(1, infoList.size());
-        assertNull(infoList.get(0).getGroupUuid());
+        assertEquals(uuid, infoList.get(0).getGroupUuid());
 
         infoList = ShellIdentityUtils.invokeMethodWithShellPermissions(mSm,
                 (sm) -> sm.getSubscriptionsInGroup(uuid));
@@ -698,33 +708,40 @@ public class SubscriptionManagerTest {
         }
         availableInfoList = ShellIdentityUtils.invokeMethodWithShellPermissions(mSm,
                 (sm) -> sm.getAvailableSubscriptionInfoList());
-        if (availableInfoList.size() > 1) {
-            List<Integer> availableSubGroup = availableInfoList.stream()
-                    .map(info -> info.getSubscriptionId())
-                    .filter(subId -> subId != mSubId)
-                    .collect(Collectors.toList());
+        // has the OPSTR_READ_DEVICE_IDENTIFIERS permission
+        try {
+            setIdentifierAccess(true);
+            if (availableInfoList.size() > 1) {
+                List<Integer> availableSubGroup = availableInfoList.stream()
+                        .map(info -> info.getSubscriptionId())
+                        .filter(subId -> subId != mSubId)
+                        .collect(Collectors.toList());
 
+                ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mSm,
+                        (sm) -> sm.addSubscriptionsIntoGroup(availableSubGroup, uuid));
+
+                infoList = mSm.getSubscriptionsInGroup(uuid);
+                assertNotNull(infoList);
+                assertEquals(availableInfoList.size(), infoList.size());
+
+                ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mSm,
+                        (sm) -> sm.removeSubscriptionsFromGroup(availableSubGroup, uuid));
+            }
+
+            // Remove from subscription group with current sub Id.
             ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mSm,
-                    (sm) -> sm.addSubscriptionsIntoGroup(availableSubGroup, uuid));
+                    (sm) -> sm.removeSubscriptionsFromGroup(subGroup, uuid));
 
             infoList = mSm.getSubscriptionsInGroup(uuid);
             assertNotNull(infoList);
-            assertEquals(availableInfoList.size(), infoList.size());
-
-            ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mSm,
-                    (sm) -> sm.removeSubscriptionsFromGroup(availableSubGroup, uuid));
+            assertTrue(infoList.isEmpty());
+        } finally {
+            setIdentifierAccess(false);
         }
-
-        // Remove from subscription group with current sub Id.
-        ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mSm,
-                (sm) -> sm.removeSubscriptionsFromGroup(subGroup, uuid));
-
-        infoList = mSm.getSubscriptionsInGroup(uuid);
-        assertNotNull(infoList);
-        assertTrue(infoList.isEmpty());
     }
 
     @Test
+    @ApiTest(apis = "android.telephony.SubscriptionManager#getSubscriptionsInGroup")
     public void testAddSubscriptionIntoNewGroupWithPermission() throws Exception {
         // Set subscription group with current sub Id.
         List<Integer> subGroup = new ArrayList();
@@ -733,28 +750,33 @@ public class SubscriptionManagerTest {
         ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mSm,
                 (sm) -> sm.addSubscriptionsIntoGroup(subGroup, uuid));
 
-        // Getting subscriptions in group.
         List<SubscriptionInfo> infoList = mSm.getSubscriptionsInGroup(uuid);
         assertNotNull(infoList);
-        assertEquals(1, infoList.size());
-        assertNull(infoList.get(0).getGroupUuid());
+        assertTrue(infoList.isEmpty());
 
-        infoList = ShellIdentityUtils.invokeMethodWithShellPermissions(mSm,
-                (sm) -> sm.getSubscriptionsInGroup(uuid));
-        assertNotNull(infoList);
-        assertEquals(1, infoList.size());
-        assertEquals(uuid, infoList.get(0).getGroupUuid());
+        // Getting subscriptions in group.
+        try {
+            setIdentifierAccess(true);
+            infoList = mSm.getSubscriptionsInGroup(uuid);
+            assertNotNull(infoList);
+            assertEquals(1, infoList.size());
+            assertEquals(uuid, infoList.get(0).getGroupUuid());
+        } finally {
+            setIdentifierAccess(false);
+        }
 
         // Remove from subscription group with current sub Id.
         ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(mSm,
                 (sm) -> sm.removeSubscriptionsFromGroup(subGroup, uuid));
 
-        infoList = mSm.getSubscriptionsInGroup(uuid);
+        infoList = ShellIdentityUtils.invokeMethodWithShellPermissions(mSm,
+                (sm) -> sm.getSubscriptionsInGroup(uuid));
         assertNotNull(infoList);
         assertTrue(infoList.isEmpty());
     }
 
     @Test
+    @ApiTest(apis = "android.telephony.SubscriptionManager#setOpportunistic")
     public void testSettingOpportunisticSubscription() throws Exception {
         // Set subscription to be opportunistic. This should fail
         // because we don't have MODIFY_PHONE_STATE or carrier privilege permission.
@@ -762,6 +784,12 @@ public class SubscriptionManagerTest {
             mSm.setOpportunistic(true, mSubId);
             fail();
         } catch (SecurityException expected) {
+            // Caller permission should not affect accessing SIMINFO table.
+            assertNotEquals(expected.getMessage(),
+                    "Access SIMINFO table from not phone/system UID");
+            // Caller does not have permission to manage mSubId.
+            assertEquals(expected.getMessage(),
+                    "Caller requires permission on sub " + mSubId);
         }
 
         // Shouldn't crash.
@@ -1227,7 +1255,7 @@ public class SubscriptionManagerTest {
         // Vendors can add supported usage settings by adding resources.
         try {
             int[] usageSettingsFromResource = context.getResources().getIntArray(
-                com.android.internal.R.array.config_supported_cellular_usage_settings);
+                Resources.getSystem().getIdentifier("config_supported_cellular_usage_settings","array","android"));
 
             for (int setting : usageSettingsFromResource) {
                 supportedUsageSettings.add(setting);
@@ -1458,5 +1486,14 @@ public class SubscriptionManagerTest {
         boolean validNetworkType = dataNetworkType == TelephonyManager.NETWORK_TYPE_NR;
 
         return validCarrier && validNetworkType && validCapabilities;
+    }
+
+    private void setIdentifierAccess(boolean allowed) {
+        String op = AppOpsManager.OPSTR_READ_DEVICE_IDENTIFIERS;
+        AppOpsManager appOpsManager = InstrumentationRegistry.getContext().getSystemService(
+                AppOpsManager.class);
+        int mode = allowed ? AppOpsManager.MODE_ALLOWED : AppOpsManager.opToDefaultMode(op);
+        ShellIdentityUtils.invokeMethodWithShellPermissionsNoReturn(
+                appOpsManager, (appOps) -> appOps.setUidMode(op, Process.myUid(), mode));
     }
 }

@@ -28,6 +28,8 @@ import android.test.suitebuilder.annotation.LargeTest;
 import android.util.Log;
 import android.view.SurfaceHolder;
 
+import com.android.compatibility.common.util.ApiTest;
+
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -290,6 +292,9 @@ public class MediaRecorderStressTest extends ActivityInstrumentationTestCase2<Me
 
     //Stress test case for switching camera and video recorder preview.
     @LargeTest
+    @ApiTest(apis = {"android.media.MediaRecorder#setVideoSource",
+             "android.media.MediaRecorder#setVideoEncoder",
+             "android.media.MediaRecorder#setPreviewDisplay"})
     public void testStressCameraSwitchRecorder() throws Exception {
         if (Camera.getNumberOfCameras() < 1) {
             return;
@@ -299,7 +304,6 @@ public class MediaRecorderStressTest extends ActivityInstrumentationTestCase2<Me
         int width;
         int height;
         SurfaceHolder mSurfaceHolder;
-        mSurfaceHolder = MediaFrameworkTest.getSurfaceView().getHolder();
         File stressOutFile = new File(WorkDir.getTopDir(), MEDIA_STRESS_OUTPUT);
         Writer output = new BufferedWriter(new FileWriter(stressOutFile, true));
         output.write("Camera and video recorder preview switching\n");
@@ -324,6 +328,7 @@ public class MediaRecorderStressTest extends ActivityInstrumentationTestCase2<Me
             if (mCamera == null) {
                 break;
             }
+            mSurfaceHolder = MediaFrameworkTest.getSurfaceView().getHolder();
             // Try to get camera smallest supported resolution.
             // If we fail for any reason, set the video size to default value.
             List<Camera.Size> previewSizes = mCamera.getParameters().getSupportedPreviewSizes();
@@ -396,6 +401,11 @@ public class MediaRecorderStressTest extends ActivityInstrumentationTestCase2<Me
 
     //Stress test case for record a video and play right away.
     @LargeTest
+    @ApiTest(apis = {"android.media.MediaRecorder#setVideoSource",
+             "android.media.MediaRecorder#setVideoEncoder",
+             "android.media.MediaRecorder#setPreviewDisplay",
+             "android.media.MediaPlayer#setDataSource",
+             "android.media.MediaPlayer#setDisplay"})
     public void testStressRecordVideoAndPlayback() throws Exception {
         if (Camera.getNumberOfCameras() < 1) {
             return;
@@ -403,7 +413,6 @@ public class MediaRecorderStressTest extends ActivityInstrumentationTestCase2<Me
 
         String filename;
         SurfaceHolder mSurfaceHolder;
-        mSurfaceHolder = MediaFrameworkTest.getSurfaceView().getHolder();
         File stressOutFile = new File(WorkDir.getTopDir(), MEDIA_STRESS_OUTPUT);
         Writer output = new BufferedWriter(
                 new FileWriter(stressOutFile, true));
@@ -431,6 +440,7 @@ public class MediaRecorderStressTest extends ActivityInstrumentationTestCase2<Me
             Log.v(TAG, "bitRate : " + mBitRate);
             Log.v(TAG, "recordDuration : " + mRecordDuration);
 
+            mSurfaceHolder = MediaFrameworkTest.getSurfaceView().getHolder();
             mRecorder.setOnErrorListener(mRecorderErrorCallback);
             mRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
             mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);

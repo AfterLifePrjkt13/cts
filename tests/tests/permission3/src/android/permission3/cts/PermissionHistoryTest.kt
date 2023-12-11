@@ -30,6 +30,7 @@ import org.junit.Assume.assumeFalse
 import org.junit.Before
 import org.junit.Ignore
 import org.junit.Test
+import java.util.regex.Pattern
 
 private const val APP_LABEL_1 = "CtsMicAccess"
 private const val APP_LABEL_2 = "CtsMicAccess2"
@@ -42,14 +43,15 @@ private const val SHOW_SYSTEM = "Show system"
 private const val SHOW_7_DAYS = "Show 7 days"
 private const val SHOW_24_HOURS = "Show 24 hours"
 private const val MORE_OPTIONS = "More options"
-private const val TIMELINE_7_DAYS_DESCRIPTION = "in the past 7 days"
-private const val DASHBOARD_7_DAYS_DESCRIPTION = "7 days"
+private const val DASHBOARD_7_DAYS_DESCRIPTION_REGEX = "^.*7.*days$"
+private const val DASHBOARD_TIME_DESCRIPTION_REGEX = "^[0-2]?[0-9]:[0-5][0-9].*"
 private const val PRIV_DASH_7_DAY_ENABLED = "privacy_dashboard_7_day_toggle"
+private const val REFRESH = "Refresh"
 
 @SdkSuppress(minSdkVersion = Build.VERSION_CODES.S)
 class PermissionHistoryTest : BasePermissionHubTest() {
     private val micLabel = packageManager.getPermissionGroupInfo(
-        Manifest.permission_group.MICROPHONE, 0).loadLabel(packageManager).toString()
+            Manifest.permission_group.MICROPHONE, 0).loadLabel(packageManager).toString()
     private var was7DayToggleEnabled = false
 
     // Permission history is not available on TV devices.
@@ -78,6 +80,9 @@ class PermissionHistoryTest : BasePermissionHubTest() {
 
     @Before
     fun setUpTest() {
+        // Wear does not currently support the permission dashboard
+        assumeFalse(isWatch)
+
         SystemUtil.runWithShellPermissionIdentity {
             was7DayToggleEnabled = DeviceConfig.getBoolean(NAMESPACE_PRIVACY,
                     PRIV_DASH_7_DAY_ENABLED, false)
@@ -100,9 +105,22 @@ class PermissionHistoryTest : BasePermissionHubTest() {
         waitFindObject(By.textContains(APP_LABEL_1))
 
         openPermissionDashboard()
-        waitFindObject(By.res("android:id/title").textContains("Microphone")).click()
-        waitFindObject(By.textContains(micLabel))
-        waitFindObject(By.textContains(APP_LABEL_1))
+
+        SystemUtil.eventually {
+            try {
+                waitFindObject(By.hasChild(By.textContains("Microphone"))
+                        .hasChild(By.textStartsWith("Used by")))
+                        .click()
+                waitFindObject(By.textContains(micLabel))
+                waitFindObject(By.textContains(APP_LABEL_1))
+            } catch (e: Exception) {
+                // Sometimes the dashboard was in the state from previous failed tests.
+                // Clicking the refresh button to get the most recent access.
+                waitFindObject(By.descContains(REFRESH)).click()
+                throw e
+            }
+        }
+
         pressBack()
         pressBack()
     }
@@ -121,10 +139,18 @@ class PermissionHistoryTest : BasePermissionHubTest() {
         // Auto doesn't show the "Show system" action when it is disabled. If a system app ends up
         // being installed for this test, then the Auto logic should be tested too.
         if (!isAutomotive) {
-            val menuView = waitFindObject(By.descContains(MORE_OPTIONS))
-            menuView.click()
-
-            waitFindObject(By.text(SHOW_SYSTEM))
+            SystemUtil.eventually {
+                try {
+                    val menuView = waitFindObject(By.descContains(MORE_OPTIONS))
+                    menuView.click()
+                    waitFindObject(By.text(SHOW_SYSTEM))
+                } catch (e: Exception) {
+                    // Sometimes the dashboard was in the state from previous failed tests.
+                    // Clicking the refresh button to get the most recent access.
+                    waitFindObject(By.descContains(REFRESH)).click()
+                    throw e
+                }
+            }
         }
 
         pressBack()
@@ -152,8 +178,19 @@ class PermissionHistoryTest : BasePermissionHubTest() {
             waitFindObject(By.text(SHOW_7_DAYS)).click()
         }
 
-        waitFindObject(By.res("android:id/title").textContains("Microphone"))
-        waitFindObject(By.textContains(DASHBOARD_7_DAYS_DESCRIPTION))
+        SystemUtil.eventually {
+            try {
+                waitFindObject(By.hasChild(By.textContains("Microphone"))
+                        .hasChild(By.textStartsWith("Used by")))
+            } catch (e: Exception) {
+                // Sometimes the dashboard was in the state from previous failed tests.
+                // Clicking the refresh button to get the most recent access.
+                waitFindObject(By.descContains(REFRESH)).click()
+                throw e
+            }
+        }
+
+        waitFindObject(By.text(Pattern.compile(DASHBOARD_7_DAYS_DESCRIPTION_REGEX, Pattern.DOTALL)))
 
         pressBack()
     }
@@ -182,7 +219,7 @@ class PermissionHistoryTest : BasePermissionHubTest() {
 
         waitFindObject(By.descContains(micLabel))
         waitFindObject(By.textContains(APP_LABEL_1))
-        waitFindObject(By.textContains(TIMELINE_7_DAYS_DESCRIPTION))
+        waitFindObject(By.text(Pattern.compile(DASHBOARD_7_DAYS_DESCRIPTION_REGEX, Pattern.DOTALL)))
 
         pressBack()
     }
@@ -196,10 +233,18 @@ class PermissionHistoryTest : BasePermissionHubTest() {
         openMicrophoneTimeline()
         waitFindObject(By.textContains(micLabel))
         waitFindObject(By.textContains(APP_LABEL_1))
-        waitFindObject(By.res(
-                PERMISSION_CONTROLLER_PACKAGE_ID_PREFIX + HISTORY_PREFERENCE_ICON))
-        waitFindObject(By.res(
-                PERMISSION_CONTROLLER_PACKAGE_ID_PREFIX + HISTORY_PREFERENCE_TIME))
+        if (isAutomotive) {
+            // Automotive views don't have the same ids as phones - find an example of the time
+            // usage instead. Specify the package name to avoid matching with the system UI time.
+            waitFindObject(
+                By.text(Pattern.compile(DASHBOARD_TIME_DESCRIPTION_REGEX, Pattern.DOTALL))
+                    .pkg(context.packageManager.permissionControllerPackageName))
+        } else {
+            waitFindObject(By.res(
+                    PERMISSION_CONTROLLER_PACKAGE_ID_PREFIX + HISTORY_PREFERENCE_ICON))
+            waitFindObject(By.res(
+                    PERMISSION_CONTROLLER_PACKAGE_ID_PREFIX + HISTORY_PREFERENCE_TIME))
+        }
         pressBack()
     }
 

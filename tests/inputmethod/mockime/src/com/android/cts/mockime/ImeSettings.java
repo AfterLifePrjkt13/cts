@@ -25,6 +25,7 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.window.extensions.layout.WindowLayoutInfo;
 
 import java.lang.annotation.Retention;
 
@@ -60,6 +61,8 @@ public class ImeSettings {
             "InlineSuggestionViewContentDesc";
     private static final String STRICT_MODE_ENABLED = "StrictModeEnabled";
     private static final String VERIFY_CONTEXT_APIS_IN_ON_CREATE = "VerifyContextApisInOnCreate";
+    private static final String WINDOW_LAYOUT_INFO_CALLBACK_ENABLED =
+            "WindowLayoutInfoCallbackEnabled";
 
     /**
      * Simulate the manifest flag enableOnBackInvokedCallback being true for the IME.
@@ -185,6 +188,10 @@ public class ImeSettings {
 
     public boolean isVerifyContextApisInOnCreate() {
         return mBundle.getBoolean(VERIFY_CONTEXT_APIS_IN_ON_CREATE, false);
+    }
+
+    public boolean isWindowLayoutInfoCallbackEnabled() {
+        return mBundle.getBoolean(WINDOW_LAYOUT_INFO_CALLBACK_ENABLED, false);
     }
 
     public boolean isOnBackCallbackEnabled() {
@@ -370,6 +377,14 @@ public class ImeSettings {
          */
         public Builder setVerifyUiContextApisInOnCreate(boolean enabled) {
             mBundle.putBoolean(VERIFY_CONTEXT_APIS_IN_ON_CREATE, enabled);
+            return this;
+        }
+
+        /**
+         * Sets whether to enable {@link WindowLayoutInfo} callbacks for {@link MockIme}.
+         */
+        public Builder setWindowLayoutInfoCallbackEnabled(boolean enabled) {
+            mBundle.putBoolean(WINDOW_LAYOUT_INFO_CALLBACK_ENABLED, enabled);
             return this;
         }
 

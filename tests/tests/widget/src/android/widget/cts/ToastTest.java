@@ -28,6 +28,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeFalse;
 
 import static java.util.stream.Collectors.toList;
@@ -63,6 +64,7 @@ import androidx.test.filters.LargeTest;
 import androidx.test.rule.ActivityTestRule;
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.compatibility.common.util.ApiTest;
 import com.android.compatibility.common.util.PollingCheck;
 import com.android.compatibility.common.util.SystemUtil;
 import com.android.compatibility.common.util.TestUtils;
@@ -130,6 +132,16 @@ public class ToastTest {
         // disable rate limiting for tests
         SystemUtil.runWithShellPermissionIdentity(() -> mNotificationManager
                 .setToastRateLimitingEnabled(false));
+
+        // Wait until the activity is resumed. Otherwise, custom toasts from non-resumed activity
+        // may be blocked depending on the timing.
+        PollingCheck.waitFor(TIME_OUT, () -> null != mActivityRule.getActivity());
+        try {
+            assertTrue("Timeout while waiting for onResume()",
+                    mActivityRule.getActivity().waitUntilResumed(TIME_OUT));
+        } catch (InterruptedException e) {
+            fail("Got InterruptedException while waiting for onResume()");
+        }
     }
 
     @After
@@ -978,7 +990,9 @@ public class ToastTest {
      * us to wait a given amount of time to test that the limit has been enforced/lifted.
      */
     @Test
+    @ApiTest(apis = {"android.widget.Toast#show"})
     public void testRateLimitingToastsWhenInBackground() throws Throwable {
+        assumeFalse("Skipping test: Watch does not support new Toast behavior yet", isWatch());
         // enable rate limiting to test it
         SystemUtil.runWithShellPermissionIdentity(() -> mNotificationManager
                 .setToastRateLimitingEnabled(true));
@@ -1040,7 +1054,9 @@ public class ToastTest {
     }
 
     @Test
+    @ApiTest(apis = {"android.widget.Toast#show"})
     public void testAppWithUnlimitedToastsPermissionCanPostUnlimitedToasts() throws Throwable {
+        assumeFalse("Skipping test: Watch does not support new Toast behavior yet", isWatch());
         // enable rate limiting to test it
         SystemUtil.runWithShellPermissionIdentity(() -> mNotificationManager
                 .setToastRateLimitingEnabled(true));
