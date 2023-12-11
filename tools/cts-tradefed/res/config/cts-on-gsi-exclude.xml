@@ -101,11 +101,14 @@
     <option name="compatibility:exclude-filter" value="CtsTransitionTestCases" />
 
     <!-- b/198226244 -->
-    <option name="compatibility:exclude-filter" value="CtsVideoTestCases android.video.cts.CodecEncoderPerformanceTest#testPerformanceOfHardwareVideoEncoders" />
+    <!-- b/259733096 Performance tests are disabled in GSI builds -->
+    <option name="compatibility:exclude-filter" value="CtsVideoTestCases android.video.cts.CodecEncoderPerformanceTest" />
 
     <!-- b/203177211 -->
     <option name="compatibility:exclude-filter" value="CtsAppSecurityHostTestCases android.appsecurity.cts.ListeningPortsTest#testNoRemotelyAccessibleListeningUdpPorts" />
 
+    <!-- b/192912975 Remove CtsMediaTestCases android.media.cts.DecodeAccuracyTest from cts-on-gsi -->
+    <option name="compatibility:exclude-filter" value="CtsMediaTestCases android.media.cts.DecodeAccuracyTest" />
 
     <!-- b/228390608 No Tv Input Service implementation on GSI -->
     <option name="compatibility:exclude-filter" value="CtsHdmiCecHostTestCases android.hdmicec.cts.tv.HdmiCecRemoteControlPassThroughTest" />
@@ -120,5 +123,14 @@
 
     <!-- b/238155422 -->
     <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.ConnectivityManagerTest#testSetAirplaneMode" />
+
+    <!-- b/192113622, b/203031609, b/204402327, b/204615046, b/204860049, b/243105391  Remove tests for S "optional" algorithms for GRF devices -->
+    <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.IpSecAlgorithmImplTest#testChaCha20Poly1305" />
+    <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.IpSecManagerTest#testChaCha20Poly1305Tcp4" />
+    <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.IpSecManagerTest#testChaCha20Poly1305Tcp6" />
+    <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.IpSecManagerTest#testChaCha20Poly1305Udp4" />
+    <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.IpSecManagerTest#testChaCha20Poly1305Udp6" />
+    <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.IpSecManagerTest#testChaCha20Poly1305Udp4UdpEncap" />
+    <option name="compatibility:exclude-filter" value="CtsNetTestCases android.net.cts.IpSecManagerTest#testChaCha20Poly1305Tcp4UdpEncap" />
 
 </configuration>
