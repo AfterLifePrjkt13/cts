@@ -14,11 +14,20 @@
  * limitations under the License.
  */
 
-package com.android.compatibility.common.util;
+package com.android.bedstead.harrier.annotations;
 
-public class DisableAnimationRule extends OverrideAnimationScaleRule {
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-    public DisableAnimationRule() {
-        super(0);
-    }
+/**
+ * Annotation to indicate that a test requires multi-user support.
+ *
+ * <p>This can be enforced by using {@code DeviceState}.
+ */
+@Target({ElementType.METHOD, ElementType.ANNOTATION_TYPE, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+//@Experimental
+public @interface RequireMultiUserSupport {
 }

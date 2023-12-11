@@ -1479,6 +1479,14 @@ public class MediaUtils {
         if (screenSize < (FIRST_SDK_IS_AT_LEAST_R ? 3.3 : 2.5)) return false;
         if (screenSize > 8.0) return false;
         if (!hasDeviceGotBattery()) return false;
+        // handheld nature is not exposed to package manager, so for now,
+        // in addition to physical screen size, the following checks are
+        // also required:
+        if (!pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)) return false;
+        if (isWatch()) return false;
+        if (isTv()) return false;
+        if (isAutomotive()) return false;
+        if (isPc()) return false;
         return true;
     }
 
@@ -1487,6 +1495,14 @@ public class MediaUtils {
         if (screenSize < 7.0) return false;
         if (screenSize > 18.0) return false;
         if (!hasDeviceGotBattery()) return false;
+        // tablet nature is not exposed to package manager, so for now,
+        // in addition to physical screen size, the following checks are
+        // also required:
+        if (!pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)) return false;
+        if (isWatch()) return false;
+        if (isTv()) return false;
+        if (isAutomotive()) return false;
+        if (isPc()) return false;
         return true;
     }
 

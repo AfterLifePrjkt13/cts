@@ -67,6 +67,7 @@ import com.android.bedstead.harrier.annotations.RequireDoesNotHaveFeature;
 import com.android.bedstead.harrier.annotations.RequireFeature;
 import com.android.bedstead.harrier.annotations.RequireHeadlessSystemUserMode;
 import com.android.bedstead.harrier.annotations.RequireLowRamDevice;
+import com.android.bedstead.harrier.annotations.RequireMultiUserSupport;
 import com.android.bedstead.harrier.annotations.RequireNotHeadlessSystemUserMode;
 import com.android.bedstead.harrier.annotations.RequireNotLowRamDevice;
 import com.android.bedstead.harrier.annotations.RequirePackageInstalled;
@@ -786,6 +787,12 @@ public final class DeviceState extends HarrierRule {
                 ensureGlobalSettingSet(
                         ensureGlobalSettingSetAnnotation.key(),
                         ensureGlobalSettingSetAnnotation.value());
+                continue;
+            }
+
+            if (annotation instanceof RequireMultiUserSupport) {
+                requireMultiUserSupport();
+                continue;
             }
         }
 
@@ -2527,5 +2534,10 @@ public final class DeviceState extends HarrierRule {
             mOriginalGlobalSettings.put(key, TestApis.settings().global().getString(value));
         }
         TestApis.settings().global().putString(key, value);
+    }
+
+    private void requireMultiUserSupport() {
+        assumeTrue("This test is only supported on multi user devices",
+                TestApis.users().supportsMultipleUsers());
     }
 }
