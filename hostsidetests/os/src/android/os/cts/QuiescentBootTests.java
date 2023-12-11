@@ -44,8 +44,7 @@ import java.util.List;
 
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class QuiescentBootTests extends BaseHostJUnit4Test {
-    private static final int REBOOT_TIMEOUT = 120000;
-
+    private static final String REBOOT_REASON_QUIESCENT = "quiescent";
     private static final String FEATURE_LEANBACK_ONLY = "android.software.leanback_only";
     private static final String CMD_DUMPSYS_POWER = "dumpsys power --proto";
     private static final String CMD_INPUT_WAKEUP = "input keyevent WAKEUP";
@@ -71,15 +70,13 @@ public class QuiescentBootTests extends BaseHostJUnit4Test {
 
     @Test
     public void testQuiescentBoot_asleep() throws Exception {
-        mDevice.executeAdbCommand("reboot", "quiescent");
-        mDevice.waitForBootComplete(REBOOT_TIMEOUT);
+        mDevice.reboot(REBOOT_REASON_QUIESCENT);
         assertEquals("Expected to boot into sleep state.", WAKEFULNESS_ASLEEP, getWakefulness());
     }
 
     @Test
     public void testQuiescentBoot_wakesUpWithPowerButton() throws Exception {
-        mDevice.executeAdbCommand("reboot", "quiescent");
-        mDevice.waitForBootComplete(REBOOT_TIMEOUT);
+        mDevice.reboot(REBOOT_REASON_QUIESCENT);
         mDevice.executeShellCommand(CMD_INPUT_POWER);
         assertEquals("Expected to wake up when pressing the power button.",
                 WAKEFULNESS_AWAKE, getWakefulness());
@@ -87,28 +84,20 @@ public class QuiescentBootTests extends BaseHostJUnit4Test {
 
     @Test
     public void testQuiescentBoot_asleepAfterQuiescentReboot() throws Exception {
-        mDevice.executeAdbCommand("reboot", "quiescent");
-        mDevice.waitForBootComplete(REBOOT_TIMEOUT);
-
+        mDevice.reboot(REBOOT_REASON_QUIESCENT);
         assertEquals("Expected to boot into sleep state.", WAKEFULNESS_ASLEEP, getWakefulness());
     }
 
     @Test
     public void testQuiescentBoot_awakeAfterReboot() throws Exception {
-        mDevice.executeAdbCommand("reboot", "quiescent");
-        mDevice.waitForBootComplete(REBOOT_TIMEOUT);
-
-        mDevice.executeAdbCommand("reboot");
-        mDevice.waitForBootComplete(REBOOT_TIMEOUT);
-
+        mDevice.reboot(REBOOT_REASON_QUIESCENT);
+        mDevice.reboot();
         assertEquals("Expected to boot in awake state.", WAKEFULNESS_AWAKE, getWakefulness());
     }
 
     @Test
     public void testQuiescentBoot_activitiesNotResumedAfterBoot() throws Exception {
-        mDevice.executeAdbCommand("reboot", "quiescent");
-        mDevice.waitForBootComplete(REBOOT_TIMEOUT);
-
+        mDevice.reboot(REBOOT_REASON_QUIESCENT);
         List<String> resumedActivities = WindowManagerUtil.getResumedActivities(getDevice());
         assertEquals("Expected no resumed activities", 0, resumedActivities.size());
     }

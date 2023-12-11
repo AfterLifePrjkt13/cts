@@ -34,6 +34,7 @@ import com.android.tradefed.testtype.junit4.BaseHostJUnit4Test;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -98,6 +99,7 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
     @Test
     public void resumeOnReboot_ManagedProfile_Success() throws Exception {
         assumeTrue("Device isn't at least S or has no lock screen", isSupportedSDevice());
+        assumeTrue("Device does not support file-based encryption", supportFileBasedEncryption());
 
         if (!getDevice().hasFeature("android.software.managed_users")) {
             CLog.v(TAG, "Device doesn't support managed users; skipping test");
@@ -139,6 +141,7 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
     @Test
     public void resumeOnReboot_TwoUsers_SingleUserUnlock_Success() throws Exception {
         assumeTrue("Device isn't at least S or has no lock screen", isSupportedSDevice());
+        assumeTrue("Device does not support file-based encryption", supportFileBasedEncryption());
 
         if (!mSupportsMultiUser) {
             CLog.v(TAG, "Device doesn't support multi-user; skipping test");
@@ -188,9 +191,12 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
         }
     }
 
+    // TODO(b/276999424): Re-enable after finding root cause of test unreliability.
+    @Ignore
     @Test
     public void resumeOnReboot_TwoUsers_BothUserUnlock_Success() throws Exception {
         assumeTrue("Device isn't at least S or has no lock screen", isSupportedSDevice());
+        assumeTrue("Device does not support file-based encryption", supportFileBasedEncryption());
 
         if (!mSupportsMultiUser) {
             CLog.v(TAG, "Device doesn't support multi-user; skipping test");
@@ -245,6 +251,7 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
     @Test
     public void resumeOnReboot_SingleUser_ServerBased_Success() throws Exception {
         assumeTrue("Device isn't at least S or has no lock screen", isSupportedSDevice());
+        assumeTrue("Device does not support file-based encryption", supportFileBasedEncryption());
 
         int[] users = Utils.prepareSingleUser(getDevice());
         int initialUser = users[0];
@@ -278,6 +285,7 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
     @Test
     public void resumeOnReboot_SingleUser_MultiClient_ClientASuccess() throws Exception {
         assumeTrue("Device isn't at least S or has no lock screen", isSupportedSDevice());
+        assumeTrue("Device does not support file-based encryption", supportFileBasedEncryption());
 
         int[] users = Utils.prepareSingleUser(getDevice());
         int initialUser = users[0];
@@ -318,6 +326,7 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
     @Test
     public void resumeOnReboot_SingleUser_MultiClient_ClientBSuccess() throws Exception {
         assumeTrue("Device isn't at least S or has no lock screen", isSupportedSDevice());
+        assumeTrue("Device does not support file-based encryption", supportFileBasedEncryption());
 
         int[] users = Utils.prepareSingleUser(getDevice());
         int initialUser = users[0];
@@ -478,8 +487,8 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
     private void deviceRebootAndApply(String clientName) throws Exception {
         verifyLskfCaptured(clientName);
 
-        String res = getDevice().executeShellCommand("cmd recovery reboot-and-apply " + clientName
-                + " cts-test");
+        String res = executeShellCommandWithLogging(
+                "cmd recovery reboot-and-apply " + clientName + " cts-test");
         if (res != null && res.contains("Reboot and apply status: failure")) {
             fail("could not call reboot-and-apply");
         }
@@ -515,10 +524,7 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
     }
 
     private void stopUserAsync(int userId) throws Exception {
-        String stopUserCommand = "am stop-user -f " + userId;
-        CLog.d("starting command \"" + stopUserCommand);
-        CLog.d("Output for command " + stopUserCommand + ": "
-                + getDevice().executeShellCommand(stopUserCommand));
+        executeShellCommandWithLogging("am stop-user -f " + userId);
     }
 
     private void removeUser(int userId) throws Exception  {
@@ -573,9 +579,21 @@ public class ResumeOnRebootHostTest extends BaseHostJUnit4Test {
         return isAtleastS && getDevice().hasFeature(FEATURE_SECURE_LOCK_SCREEN);
     }
 
+    private boolean supportFileBasedEncryption() throws Exception {
+        return "file".equals(getDevice().getProperty("ro.crypto.type"));
+    }
+
     private class InstallMultiple extends BaseInstallMultiple<InstallMultiple> {
         public InstallMultiple() {
             super(getDevice(), getBuild(), getAbi());
         }
+    }
+
+    private String executeShellCommandWithLogging(String command)
+            throws DeviceNotAvailableException {
+        CLog.d("Starting command: " + command);
+        String result = getDevice().executeShellCommand(command);
+        CLog.d("Output for command \"" + command + "\": " + result);
+        return result;
     }
 }

@@ -142,6 +142,7 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.test.filters.SdkSuppress;
 
+import com.android.compatibility.common.util.FeatureUtil;
 import com.android.cts.install.lib.TestApp;
 import com.android.modules.utils.build.SdkLevel;
 
@@ -1698,7 +1699,10 @@ public class ScopedStorageDeviceTest extends ScopedStorageBaseDeviceTest {
             assertCanRenameFile(videoFile1, videoFile2);
 
             // Uri of videoFile2 should be accessible after rename.
-            assertThat(cr.openFileDescriptor(uriVideoFile2, "rw")).isNotNull();
+            try (ParcelFileDescriptor pfd = cr.openFileDescriptor(uriVideoFile2, "rw")) {
+                assertThat(pfd).isNotNull();
+            }
+
             // Uri of videoFile1 should not be accessible after rename.
             assertThrows(FileNotFoundException.class,
                     () -> {
@@ -2449,7 +2453,10 @@ public class ScopedStorageDeviceTest extends ScopedStorageBaseDeviceTest {
             // We should restore old row Id corresponding to deleted imageFile.
             assertThat(imageFile.createNewFile()).isTrue();
             assertThat(getFileRowIdFromDatabase(imageFile)).isEqualTo(oldRowId);
-            assertThat(cr.openFileDescriptor(uriOfOldFile, "rw")).isNotNull();
+            try (ParcelFileDescriptor pfd =  cr.openFileDescriptor(uriOfOldFile, "rw")) {
+                assertThat(pfd).isNotNull();
+            }
+
 
             assertThat(imageFile.delete()).isTrue();
             assertThat(createFileAs(APP_B_NO_PERMS, imageFile.getAbsolutePath())).isTrue();
@@ -2487,7 +2494,9 @@ public class ScopedStorageDeviceTest extends ScopedStorageBaseDeviceTest {
             assertThat(newUri).isNotNull();
             assertThat(newUri.getLastPathSegment()).isEqualTo(oldUri.getLastPathSegment());
             // oldUri of imageFile is still accessible after delete and rename.
-            assertThat(cr.openFileDescriptor(oldUri, "rw")).isNotNull();
+            try (ParcelFileDescriptor pfd = cr.openFileDescriptor(oldUri, "rw")) {
+                assertThat(pfd).isNotNull();
+            }
         } finally {
             imageFile.delete();
             temporaryFile.delete();
@@ -3034,6 +3043,10 @@ public class ScopedStorageDeviceTest extends ScopedStorageBaseDeviceTest {
     @Test
     @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testExternalStorageProviderAndDownloadsProvider() throws Exception {
+        // External Storage Provider and Downloads Provider are not supported on Wear OS
+        if (FeatureUtil.isWatch()) {
+            return;
+        }
         assertWritableMountModeForProvider(DocumentsContract.EXTERNAL_STORAGE_PROVIDER_AUTHORITY);
         assertWritableMountModeForProvider(DocumentsContract.DOWNLOADS_PROVIDER_AUTHORITY);
     }

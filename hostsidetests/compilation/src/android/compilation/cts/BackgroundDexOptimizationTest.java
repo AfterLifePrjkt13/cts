@@ -375,6 +375,9 @@ public final class BackgroundDexOptimizationTest extends BaseHostJUnit4Test {
         // This requires PackageManager to be alive. So run after reboot as the previous failure
         // may have device in booting state.
         assumeTrue(checkDexOptEnabled());
+
+        // Turn off the display to simulate the idle state in terms of power consumption.
+        toggleScreenOn(false);
     }
 
     private void ensurePostBootOptimizationCompleted() throws Exception {

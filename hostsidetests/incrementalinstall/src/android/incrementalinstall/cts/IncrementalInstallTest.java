@@ -23,6 +23,7 @@ import static android.incrementalinstall.common.Consts.SupportedComponents.ON_CR
 import static android.incrementalinstall.common.Consts.SupportedComponents.ON_CREATE_COMPONENT_2;
 import static android.incrementalinstall.common.Consts.SupportedComponents.UNCOMPRESSED_NATIVE_COMPONENT;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
@@ -32,6 +33,7 @@ import android.platform.test.annotations.LargeTest;
 
 import com.android.compatibility.common.tradefed.build.CompatibilityBuildHelper;
 import com.android.ddmlib.Log;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4Test;
@@ -95,12 +97,18 @@ public class IncrementalInstallTest extends BaseHostJUnit4Test {
     private static final String INSTALL_SUCCESS_OUTPUT = "Success";
     private static final long DEFAULT_TEST_TIMEOUT_MS = 60 * 1000L;
     private static final long DEFAULT_MAX_TIMEOUT_TO_OUTPUT_MS = 60 * 1000L; // 1min
+    private static final long DEFAULT_ADB_TIMEOUT_MS = 5 * 60 * 1000L; // 5mins
     private final int TEST_APP_V1_VERSION = 1;
     private final int TEST_APP_V2_VERSION = 2;
     private CompatibilityBuildHelper mBuildHelper;
 
     @Before
     public void setup() throws Exception {
+        // Increase default timeout to 5 mins to accommodate for slow restarting devices.
+        TestDeviceOptions options = new TestDeviceOptions();
+        options.setAdbCommandTimeout(DEFAULT_ADB_TIMEOUT_MS);
+        getDevice().setOptions(options);
+
         assumeTrue(hasIncrementalFeature());
         mBuildHelper = new CompatibilityBuildHelper(getBuild());
         assumeTrue(adbBinarySupportsIncremental());
@@ -254,9 +262,9 @@ public class IncrementalInstallTest extends BaseHostJUnit4Test {
         getDevice().executeAdbCommand("push",
                 getFilePathFromBuildInfo(TEST_APP_DYNAMIC_CODE_NAME + SIG_SUFFIX),
                 deviceLocalPath);
-        getDevice().executeShellCommand(
+        assertEquals("Success\n", getDevice().executeShellCommand(
                 String.format("pm install-incremental -p %s %s", TEST_APP_PACKAGE_NAME,
-                        deviceLocalPath + TEST_APP_DYNAMIC_CODE_NAME));
+                        deviceLocalPath + TEST_APP_DYNAMIC_CODE_NAME)));
         // Verify still on Incremental.
         verifyInstallationTypeAndVersion(TEST_APP_PACKAGE_NAME, /* isIncfs= */ true,
                 TEST_APP_V1_VERSION);

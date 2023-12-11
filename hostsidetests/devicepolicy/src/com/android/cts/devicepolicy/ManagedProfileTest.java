@@ -39,6 +39,7 @@ import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Set of tests for Managed Profile use cases.
@@ -586,20 +587,42 @@ public class ManagedProfileTest extends BaseManagedProfileTest {
     }
 
     private void assertChooserActivityInForeground(int userId)
-            throws DeviceNotAvailableException {
-        assertActivityInForeground("android/com.android.internal.app.ChooserActivity", userId);
+            throws Exception {
+        try {
+            assertActivityInForeground("android/com.android.internal.app.ChooserActivity", userId);
+        } catch (AssertionError e) {
+            CLog.v("ChooserActivity is not the default: " + e);
+            assertActivityInForeground(resolveActivity("android.intent.action.CHOOSER"), userId);
+        }
     }
 
     private void assertResolverActivityInForeground(int userId)
-            throws DeviceNotAvailableException {
-        assertActivityInForeground("android/com.android.internal.app.ResolverActivity", userId);
+            throws Exception {
+        try {
+            assertActivityInForeground("android/com.android.internal.app.ResolverActivity", userId);
+        } catch (AssertionError e) {
+            CLog.v("ResolverActivity is not the default: " + e);
+            assertActivityInForeground(getCustomResolverActivity(), userId);
+        }
     }
 
     private void assertActivityInForeground(String fullActivityName, int userId)
             throws DeviceNotAvailableException {
-        String commandOutput =
-                getDevice().executeShellCommand("dumpsys activity activities | grep Resumed:");
-        assertThat(commandOutput).contains("u" + userId + " " + fullActivityName);
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (System.nanoTime() <= deadline) {
+            String commandOutput = getDevice().executeShellCommand(
+                    "dumpsys activity activities | grep Resumed:");
+            if (commandOutput.contains("u" + userId + " " + fullActivityName)) {
+                return;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e){
+                e.printStackTrace();
+                Thread.currentThread().interrupt();
+            }
+        }
+        fail("Activity " + fullActivityName + " didn't become foreground");
     }
 
     private void changeUserRestrictionOrFail(String key, boolean value, int userId)
@@ -610,5 +633,30 @@ public class ManagedProfileTest extends BaseManagedProfileTest {
     private String changeUserRestriction(String key, boolean value, int userId)
             throws DeviceNotAvailableException {
         return changeUserRestriction(key, value, userId, MANAGED_PROFILE_PKG);
+    }
+
+    private String resolveActivity(String action) throws Exception  {
+        // Template output of 'pm resolve-activity -a {action} --brief' :
+        // priority=0 preferredOrder=0 match=0x0 specificIndex=-1 isDefault=false
+        // com.bar/.foo or com.bar/com.bar.foo
+        final String[] outputs = getDevice().executeShellCommand(
+                    "pm resolve-activity -a " + action + " --brief").split("\n");
+
+        assertTrue("Result of shell command: 'pm resolve-activity -a " + action
+                   + " --brief' is " + outputs[0], outputs.length >= 2);
+
+        return outputs[1];
+    }
+
+    private String getCustomResolverActivity() throws Exception {
+        final String[] outputs = getDevice().executeShellCommand(
+                "cmd overlay lookup android android:string/config_customResolverActivity")
+                .split("\n");
+
+        String customResolverActivity = resolveActivity("android.intent.action.SEND");
+        if (outputs != null && outputs.length >= 1 && outputs[0] != null && !outputs[0].isEmpty()) {
+            customResolverActivity = outputs[0];
+        }
+        return customResolverActivity;
     }
 }

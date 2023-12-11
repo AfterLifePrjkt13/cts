@@ -429,7 +429,7 @@ public class FrameRateOverrideTestActivity extends Activity {
         @Override
         public void testFrameRateOverrideBehavior(FrameRateObserver frameRateObserver,
                 float initialRefreshRate) throws InterruptedException {
-            Log.i(TAG, "Staring testFrameRateOverride");
+            Log.i(TAG, "Starting testFrameRateOverride");
             float halfFrameRate = initialRefreshRate / 2;
 
             waitForRefreshRateChange(initialRefreshRate);

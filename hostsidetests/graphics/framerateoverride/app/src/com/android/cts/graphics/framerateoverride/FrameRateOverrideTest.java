@@ -134,20 +134,30 @@ public final class FrameRateOverrideTest {
         if (!SurfaceFlingerProperties.enable_frame_rate_override().orElse(false)) {
             return modesToTest;
         }
+
+        List<Display.Mode> modesWithSameResolution = new ArrayList<>();
+        Display.Mode currentMode = mActivityRule.getActivity().getDisplay().getMode();
+        final long currentDisplayHeight = currentMode.getPhysicalHeight();
+        final long currentDisplayWidth = currentMode.getPhysicalWidth();
+
         Display.Mode[] modes = mActivityRule.getActivity().getDisplay().getSupportedModes();
         for (Display.Mode mode : modes) {
-            for (Display.Mode otherMode : modes) {
+            if (mode.getPhysicalHeight() == currentDisplayHeight
+                    && mode.getPhysicalWidth() == currentDisplayWidth) {
+                modesWithSameResolution.add(mode);
+            }
+        }
+
+        for (Display.Mode mode : modesWithSameResolution) {
+            for (Display.Mode otherMode : modesWithSameResolution) {
                 if (mode.getModeId() == otherMode.getModeId()) {
                     continue;
                 }
 
-                if (mode.getPhysicalHeight() != otherMode.getPhysicalHeight()
-                        || mode.getPhysicalWidth() != otherMode.getPhysicalWidth()) {
-                    continue;
-                }
-
+                // only add if this refresh rate is a multiple of the other
                 if (areEqual(mode.getRefreshRate(), 2 * otherMode.getRefreshRate())) {
                     modesToTest.add(mode);
+                    continue;
                 }
             }
         }

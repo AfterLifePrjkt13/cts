@@ -18,6 +18,7 @@ package com.android.cts.host.blob;
 import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4Test;
 import com.android.tradefed.testtype.junit4.DeviceTestRunOptions;
@@ -51,6 +52,9 @@ abstract class BaseBlobStoreHostTest extends BaseHostJUnit4Test {
 
     protected static final String KEY_ALLOW_PUBLIC = "public";
     protected static final String KEY_ALLOW_SAME_SIGNATURE = "same_signature";
+
+    private static final long REBOOT_TIMEOUT_MS = 3 * 60 * 1000;
+    private static final long ONLINE_TIMEOUT_MS = 3 * 60 * 1000;
 
     protected void runDeviceTest(String testPkg, String testClass, String testMethod)
             throws Exception {
@@ -92,7 +96,22 @@ abstract class BaseBlobStoreHostTest extends BaseHostJUnit4Test {
 
     protected void rebootAndWaitUntilReady() throws Exception {
         // TODO: use rebootUserspace()
-        getDevice().reboot(); // reboot() waits for device available
+        TestDeviceOptions options = getDevice().getOptions();
+        final long prevRebootTimeoutMs = options.getRebootTimeout();
+        final long prevOnlineTimeoutMs = options.getOnlineTimeout();
+        updateDeviceOptions(options, REBOOT_TIMEOUT_MS, ONLINE_TIMEOUT_MS);
+        try {
+            getDevice().reboot(); // reboot() waits for device available
+        } finally {
+            updateDeviceOptions(options, prevRebootTimeoutMs, prevOnlineTimeoutMs);
+        }
+    }
+
+    private void updateDeviceOptions(TestDeviceOptions options,
+            long rebootTimeoutMs, long onlineTimeoutMs) throws Exception {
+        options.setRebootTimeout((int) rebootTimeoutMs);
+        options.setOnlineTimeout(onlineTimeoutMs);
+        getDevice().setOptions(options);
     }
 
     protected static boolean isMultiUserSupported(ITestDevice device) throws Exception {
@@ -135,6 +154,23 @@ abstract class BaseBlobStoreHostTest extends BaseHostJUnit4Test {
         final String cmd = String.format("cmd role add-role-holder "
                 + "--user %d android.app.role.ASSISTANT %s", userId, pkgName);
         runCommand(cmd);
+        // Wait for the role holder to be changed.
+        final String regex = "user_id=" + userId + ".+?roles=\\[(.+?)\\]";
+        final Pattern pattern = Pattern.compile(regex, Pattern.MULTILINE | Pattern.DOTALL);
+        final String roleHolder = "name=android.app.role.ASSISTANT" + "holders=" + pkgName;
+        int checkRoleHolderRetries = 10;
+        while (checkRoleHolderRetries > 0) {
+            final String roleServiceDump = getDevice().executeShellCommand("dumpsys role");
+            final Matcher matcher = pattern.matcher(roleServiceDump);
+            if (!matcher.find()) {
+                Thread.sleep(10000);
+                checkRoleHolderRetries--;
+                continue;
+            }
+            if (matcher.group(1).replaceAll("\\s+", "").contains(roleHolder)) {
+                break;
+            }
+        }
     }
 
     protected void removeAssistRoleHolder(String pkgName, int userId) throws Exception {

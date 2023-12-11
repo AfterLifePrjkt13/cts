@@ -33,9 +33,11 @@ import com.android.os.AtomsProto;
 import com.android.os.AtomsProto.AppCompatStateChanged;
 import com.android.os.StatsLog.EventMetricData;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.DeviceTestCase;
 import com.android.tradefed.testtype.IBuildReceiver;
+import com.android.tradefed.util.Pair;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -183,9 +185,15 @@ public class AppCompatStateStatsTests extends DeviceTestCase implements IBuildRe
     private void testAppCompatFlow(String activity, @Nullable String secondActivity,
             boolean switchToOpened, List<AppCompatStateChanged.State>... expectedStatesOptions)
             throws Exception {
-        if (!isDeviceStateAvailable(DEVICE_STATE_OPENED)
-                || !isDeviceStateAvailable(DEVICE_STATE_CLOSED)) {
+        if (!isFoldableStateAvailable(DEVICE_STATE_OPENED)
+                || !isFoldableStateAvailable(DEVICE_STATE_CLOSED)) {
             CLog.i("Device doesn't support OPENED or CLOSED device states.");
+            return;
+        }
+
+        Pair<Integer, Integer> displaySizeClosed = getDisplayRealSize(getDevice());
+        if (displaySizeClosed == null) {
+            CLog.i("Could not determine display size while CLOSED.");
             return;
         }
 
@@ -196,6 +204,16 @@ public class AppCompatStateStatsTests extends DeviceTestCase implements IBuildRe
                 getDevice().executeShellCommand(
                         String.format(CMD_PUT_DEVICE_STATE_TEMPLATE, DEVICE_STATE_OPENED));
                 Thread.sleep(AtomTestUtils.WAIT_TIME_LONG);
+
+                Pair<Integer, Integer> displaySizeOpened = getDisplayRealSize(getDevice());
+                if (displaySizeOpened == null) {
+                    CLog.i("Could not determine display size while OPENED.");
+                    return;
+                }
+                if (displaySizeClosed.equals(displaySizeOpened)) {
+                    CLog.i("Display size has not changed.");
+                    return;
+                }
             }
 
             if (secondActivity != null) {
@@ -239,10 +257,30 @@ public class AppCompatStateStatsTests extends DeviceTestCase implements IBuildRe
         return result;
     }
 
-    private boolean isDeviceStateAvailable(int state) throws Exception {
-        return Arrays.stream(
-                getDevice().executeShellCommand(CMD_GET_AVAILABLE_DEVICE_STATES).split(","))
-                .map(Integer::valueOf)
-                .anyMatch(availableState -> availableState == state);
+    private boolean isFoldableStateAvailable(int state) throws Exception {
+        return getDevice().getFoldableStates().stream().anyMatch(
+                foldableState -> foldableState.getIdentifier() == state);
+    }
+
+
+    /**
+     * Returns the physical size of the current display used.
+     */
+    private Pair<Integer, Integer> getDisplayRealSize(ITestDevice device) throws Exception {
+        final String physicalSize = "Physical size: ";
+        String str = device.executeShellCommand("wm size");
+        if (!str.isEmpty()) {
+            String[] lines = str.split(System.getProperty("line.separator"));
+            for (String s : lines) {
+                if (s.contains(physicalSize)) {
+                    String substring = s.substring(physicalSize.length());
+                    if (!substring.isEmpty()) {
+                        return Pair.create(Integer.parseInt(substring.split("x")[0]),
+                                Integer.parseInt(substring.split("x")[1]));
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

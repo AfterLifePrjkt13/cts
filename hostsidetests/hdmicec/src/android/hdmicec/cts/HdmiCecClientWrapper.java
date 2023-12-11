@@ -795,7 +795,7 @@ public final class HdmiCecClientWrapper extends ExternalResource {
         throw new CecClientWrapperException(ErrorCodes.CecMessageNotFound, expectedMessage.name());
     }
 
-    public void checkNoMessagesSentFromDevice(int timeoutMillis)
+    public void checkNoMessagesSentFromDevice(int timeoutMillis, List<CecOperand> excludeOperands)
             throws CecClientWrapperException {
         checkCecClient();
         long startTime = System.currentTimeMillis();
@@ -810,6 +810,10 @@ public final class HdmiCecClientWrapper extends ExternalResource {
                 if (mInputConsole.ready()) {
                     String line = mInputConsole.readLine();
                     if (pattern.matcher(line).matches()) {
+                        CecOperand operand = CecMessage.getOperand(line);
+                        if(excludeOperands.contains(operand)){
+                            continue;
+                        }
                         CLog.v("Found unexpected message in " + line);
                         throw new CecClientWrapperException(
                                 ErrorCodes.CecMessageFound,
@@ -825,6 +829,12 @@ public final class HdmiCecClientWrapper extends ExternalResource {
             }
             endTime = System.currentTimeMillis();
         }
+    }
+
+    public void checkNoMessagesSentFromDevice(int timeoutMillis)
+            throws CecClientWrapperException {
+        List<CecOperand> excludeOperands = new ArrayList<>();
+        checkNoMessagesSentFromDevice(timeoutMillis, excludeOperands);
     }
 
     /**

@@ -41,6 +41,11 @@ java_test_host {
         "cts-host-utils",
         "cts-statsd-atom-host-test-utils",
     ],
+    data: [
+        ":CtsMediaMetricsHostTestApp",
+        ":CtsMediaSessionHostTestApp",
+        ":CtsMediaSessionTestHelper",
+    ],
 }
 
 filegroup {

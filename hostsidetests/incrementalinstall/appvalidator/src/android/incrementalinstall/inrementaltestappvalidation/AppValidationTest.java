@@ -39,6 +39,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
 @RunWith(AndroidJUnit4.class)
 @AppModeFull
 public class AppValidationTest {
@@ -87,6 +92,17 @@ public class AppValidationTest {
         assertEquals(isIncfsInstallation,
                 new PathChecker().isIncFsPath(installedAppInfo.installationPath));
         assertEquals(versionCode, installedAppInfo.versionCode);
+        // Read the whole file to make sure it's streamed.
+        readFullFile(new File(installedAppInfo.installationPath, "base.apk"));
+    }
+
+    private static void readFullFile(File file) throws IOException {
+        try (InputStream inputStream = new FileInputStream(file)) {
+            byte[] buffer = new byte[1024];
+            while (inputStream.read(buffer) != -1) {
+                // ignore
+            }
+        }
     }
 
     private void launchTestApp() throws Exception {

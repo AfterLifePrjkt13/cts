@@ -42,6 +42,7 @@ java_test_host {
         "src/**/net/*.java",
         "src/**/notification/*.java",
         "src/**/perfetto/*.java",
+        "src/**/performancehintmanager/*.java",
         "src/**/permissionstate/*.java",
         "src/**/settingsstats/*.java",
         "src/**/sizecompatrestartbutton/*.java",
