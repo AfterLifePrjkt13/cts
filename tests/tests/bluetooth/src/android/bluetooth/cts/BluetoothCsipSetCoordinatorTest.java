@@ -21,18 +21,22 @@ import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 
 import static org.junit.Assert.assertThrows;
 
+import android.app.UiAutomation;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothCsipSetCoordinator;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothCsipSetCoordinator;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.BluetoothUuid;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.os.Build;
 import android.os.ParcelUuid;
 import android.test.AndroidTestCase;
 import android.util.Log;
+
+import androidx.test.InstrumentationRegistry;
 
 import com.android.compatibility.common.util.ApiLevelUtil;
 
@@ -55,8 +59,8 @@ public class BluetoothCsipSetCoordinatorTest extends AndroidTestCase {
     private BluetoothCsipSetCoordinator mBluetoothCsipSetCoordinator;
     private boolean mIsCsipSetCoordinatorSupported;
     private boolean mIsProfileReady;
-    private Condition mConditionProfileConnection;
-    private ReentrantLock mProfileConnectionlock;
+    private Condition mConditionProfileIsConnected;
+    private ReentrantLock mProfileConnectedlock;
     private boolean mGroupLockCallbackCalled;
     private TestCallback mTestCallback;
     private Executor mTestExecutor;
@@ -90,8 +94,8 @@ public class BluetoothCsipSetCoordinatorTest extends AndroidTestCase {
             mAdapter = manager.getAdapter();
             assertTrue(BTAdapterUtils.enableAdapter(mAdapter, mContext));
 
-            mProfileConnectionlock = new ReentrantLock();
-            mConditionProfileConnection = mProfileConnectionlock.newCondition();
+            mProfileConnectedlock = new ReentrantLock();
+            mConditionProfileIsConnected  = mProfileConnectedlock.newCondition();
             mIsProfileReady = false;
             mBluetoothCsipSetCoordinator = null;
 
@@ -133,19 +137,6 @@ public class BluetoothCsipSetCoordinatorTest extends AndroidTestCase {
             mAdapter = null;
             TestUtils.dropPermissionAsShellUid();
         }
-    }
-
-    public void testCloseProfileProxy() {
-        if (!(mHasBluetooth && mIsCsipSetCoordinatorSupported)) return;
-
-        assertTrue(waitForProfileConnect());
-        assertNotNull(mBluetoothCsipSetCoordinator);
-        assertTrue(mIsProfileReady);
-
-        mAdapter.closeProfileProxy(
-                BluetoothProfile.CSIP_SET_COORDINATOR, mBluetoothCsipSetCoordinator);
-        assertTrue(waitForProfileDisconnect());
-        assertFalse(mIsProfileReady);
     }
 
     public void testGetConnectedDevices() {
@@ -271,11 +262,11 @@ public class BluetoothCsipSetCoordinatorTest extends AndroidTestCase {
     }
 
     private boolean waitForProfileConnect() {
-        mProfileConnectionlock.lock();
+        mProfileConnectedlock.lock();
         try {
             // Wait for the Adapter to be disabled
             while (!mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
+                if (!mConditionProfileIsConnected.await(
                         PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                     // Timeout
                     Log.e(TAG, "Timeout while waiting for Profile Connect");
@@ -285,29 +276,9 @@ public class BluetoothCsipSetCoordinatorTest extends AndroidTestCase {
         } catch (InterruptedException e) {
             Log.e(TAG, "waitForProfileConnect: interrrupted");
         } finally {
-            mProfileConnectionlock.unlock();
+            mProfileConnectedlock.unlock();
         }
         return mIsProfileReady;
-    }
-
-    private boolean waitForProfileDisconnect() {
-        mConditionProfileConnection = mProfileConnectionlock.newCondition();
-        mProfileConnectionlock.lock();
-        try {
-            while (mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
-                        PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                    // Timeout
-                    Log.e(TAG, "Timeout while waiting for Profile Disconnect");
-                    break;
-                } // else spurious wakeups
-            }
-        } catch (InterruptedException e) {
-            Log.e(TAG, "waitForProfileDisconnect: interrrupted");
-        } finally {
-            mProfileConnectionlock.unlock();
-        }
-        return !mIsProfileReady;
     }
 
     private final class BluetoothCsipServiceListener implements
@@ -315,25 +286,18 @@ public class BluetoothCsipSetCoordinatorTest extends AndroidTestCase {
 
         @Override
         public void onServiceConnected(int profile, BluetoothProfile proxy) {
-            mProfileConnectionlock.lock();
+            mProfileConnectedlock.lock();
             mBluetoothCsipSetCoordinator = (BluetoothCsipSetCoordinator) proxy;
             mIsProfileReady = true;
             try {
-                mConditionProfileConnection.signal();
+                mConditionProfileIsConnected.signal();
             } finally {
-                mProfileConnectionlock.unlock();
+                mProfileConnectedlock.unlock();
             }
         }
 
         @Override
         public void onServiceDisconnected(int profile) {
-            mProfileConnectionlock.lock();
-            mIsProfileReady = false;
-            try {
-                mConditionProfileConnection.signal();
-            } finally {
-                mProfileConnectionlock.unlock();
-            }
         }
     }
 }

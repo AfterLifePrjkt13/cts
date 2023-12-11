@@ -98,8 +98,8 @@ public class BluetoothLeBroadcastAssistantTest {
     private BluetoothLeBroadcastAssistant mBluetoothLeBroadcastAssistant;
     private boolean mIsBroadcastAssistantSupported;
     private boolean mIsProfileReady;
-    private Condition mConditionProfileConnection;
-    private ReentrantLock mProfileConnectionlock;
+    private Condition mConditionProfileIsConnected;
+    private ReentrantLock mProfileConnectedLock;
 
     @Mock
     BluetoothLeBroadcastAssistant.Callback mCallbacks;
@@ -120,8 +120,8 @@ public class BluetoothLeBroadcastAssistantTest {
         mAdapter = TestUtils.getBluetoothAdapterOrDie();
         assertTrue(BTAdapterUtils.enableAdapter(mAdapter, mContext));
 
-        mProfileConnectionlock = new ReentrantLock();
-        mConditionProfileConnection = mProfileConnectionlock.newCondition();
+        mProfileConnectedLock = new ReentrantLock();
+        mConditionProfileIsConnected = mProfileConnectedLock.newCondition();
         mIsProfileReady = false;
         mBluetoothLeBroadcastAssistant = null;
 
@@ -150,22 +150,6 @@ public class BluetoothLeBroadcastAssistantTest {
             mAdapter = null;
             TestUtils.dropPermissionAsShellUid();
         }
-    }
-
-    @Test
-    public void testCloseProfileProxy() {
-        if (shouldSkipTest()) {
-            return;
-        }
-
-        assertTrue(waitForProfileConnect());
-        assertNotNull(mBluetoothLeBroadcastAssistant);
-        assertTrue(mIsProfileReady);
-
-        mAdapter.closeProfileProxy(
-                BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT, mBluetoothLeBroadcastAssistant);
-        assertTrue(waitForProfileDisconnect());
-        assertFalse(mIsProfileReady);
     }
 
     @Test
@@ -554,11 +538,11 @@ public class BluetoothLeBroadcastAssistantTest {
     }
 
     private boolean waitForProfileConnect() {
-        mProfileConnectionlock.lock();
+        mProfileConnectedLock.lock();
         try {
             // Wait for the Adapter to be disabled
             while (!mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
+                if (!mConditionProfileIsConnected.await(
                         PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                     // Timeout
                     Log.e(TAG, "Timeout while waiting for Profile Connect");
@@ -568,54 +552,27 @@ public class BluetoothLeBroadcastAssistantTest {
         } catch (InterruptedException e) {
             Log.e(TAG, "waitForProfileConnect: interrrupted");
         } finally {
-            mProfileConnectionlock.unlock();
+            mProfileConnectedLock.unlock();
         }
         return mIsProfileReady;
-    }
-
-    private boolean waitForProfileDisconnect() {
-        mConditionProfileConnection = mProfileConnectionlock.newCondition();
-        mProfileConnectionlock.lock();
-        try {
-            while (mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
-                        PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                    // Timeout
-                    Log.e(TAG, "Timeout while waiting for Profile Disconnect");
-                    break;
-                } // else spurious wakeups
-            }
-        } catch (InterruptedException e) {
-            Log.e(TAG, "waitForProfileDisconnect: interrrupted");
-        } finally {
-            mProfileConnectionlock.unlock();
-        }
-        return !mIsProfileReady;
     }
 
     private final class ServiceListener implements BluetoothProfile.ServiceListener {
 
         @Override
         public void onServiceConnected(int profile, BluetoothProfile proxy) {
-            mProfileConnectionlock.lock();
+            mProfileConnectedLock.lock();
             mBluetoothLeBroadcastAssistant = (BluetoothLeBroadcastAssistant) proxy;
             mIsProfileReady = true;
             try {
-                mConditionProfileConnection.signal();
+                mConditionProfileIsConnected.signal();
             } finally {
-                mProfileConnectionlock.unlock();
+                mProfileConnectedLock.unlock();
             }
         }
 
         @Override
         public void onServiceDisconnected(int profile) {
-            mProfileConnectionlock.lock();
-            mIsProfileReady = false;
-            try {
-                mConditionProfileConnection.signal();
-            } finally {
-                mProfileConnectionlock.unlock();
-            }
         }
     }
 

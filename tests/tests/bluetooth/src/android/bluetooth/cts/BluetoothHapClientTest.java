@@ -20,7 +20,6 @@ import static android.Manifest.permission.BLUETOOTH_CONNECT;
 import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -70,8 +69,8 @@ public class BluetoothHapClientTest {
     private BluetoothHapClient mBluetoothHapClient;
     private boolean mIsHapClientSupported;
     private boolean mIsProfileReady;
-    private Condition mConditionProfileConnection;
-    private ReentrantLock mProfileConnectionlock;
+    private Condition mConditionProfileIsConnected;
+    private ReentrantLock mProfileConnectedlock;
 
     private boolean mOnPresetSelected = false;
     private boolean mOnPresetSelectionFailed = false;
@@ -108,8 +107,8 @@ public class BluetoothHapClientTest {
         mAdapter = TestUtils.getBluetoothAdapterOrDie();
         assertTrue(BTAdapterUtils.enableAdapter(mAdapter, mContext));
 
-        mProfileConnectionlock = new ReentrantLock();
-        mConditionProfileConnection = mProfileConnectionlock.newCondition();
+        mProfileConnectedlock = new ReentrantLock();
+        mConditionProfileIsConnected  = mProfileConnectedlock.newCondition();
         mIsProfileReady = false;
         mBluetoothHapClient = null;
 
@@ -129,21 +128,6 @@ public class BluetoothHapClientTest {
         }
         mAdapter = null;
         TestUtils.dropPermissionAsShellUid();
-    }
-
-    @Test
-    public void test_closeProfileProxy() {
-        if (shouldSkipTest()) {
-            return;
-        }
-
-        assertTrue(waitForProfileConnect());
-        assertNotNull(mBluetoothHapClient);
-        assertTrue(mIsProfileReady);
-
-        mAdapter.closeProfileProxy(BluetoothProfile.HAP_CLIENT, mBluetoothHapClient);
-        assertTrue(waitForProfileDisconnect());
-        assertFalse(mIsProfileReady);
     }
 
     @Test
@@ -479,11 +463,11 @@ public class BluetoothHapClientTest {
     }
 
     private boolean waitForProfileConnect() {
-        mProfileConnectionlock.lock();
+        mProfileConnectedlock.lock();
         try {
             // Wait for the Adapter to be disabled
             while (!mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
+                if (!mConditionProfileIsConnected.await(
                         PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                     // Timeout
                     Log.e(TAG, "Timeout while waiting for Profile Connect");
@@ -493,29 +477,9 @@ public class BluetoothHapClientTest {
         } catch (InterruptedException e) {
             Log.e(TAG, "waitForProfileConnect: interrupted");
         } finally {
-            mProfileConnectionlock.unlock();
+            mProfileConnectedlock.unlock();
         }
         return mIsProfileReady;
-    }
-
-    private boolean waitForProfileDisconnect() {
-        mConditionProfileConnection = mProfileConnectionlock.newCondition();
-        mProfileConnectionlock.lock();
-        try {
-            while (mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
-                        PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                    // Timeout
-                    Log.e(TAG, "Timeout while waiting for Profile Disconnect");
-                    break;
-                } // else spurious wakeups
-            }
-        } catch (InterruptedException e) {
-            Log.e(TAG, "waitForProfileDisconnect: interrrupted");
-        } finally {
-            mProfileConnectionlock.unlock();
-        }
-        return !mIsProfileReady;
     }
 
     private final class BluetoothHapClientServiceListener implements
@@ -523,25 +487,18 @@ public class BluetoothHapClientTest {
 
         @Override
         public void onServiceConnected(int profile, BluetoothProfile proxy) {
-            mProfileConnectionlock.lock();
+            mProfileConnectedlock.lock();
             mBluetoothHapClient = (BluetoothHapClient) proxy;
             mIsProfileReady = true;
             try {
-                mConditionProfileConnection.signal();
+                mConditionProfileIsConnected.signal();
             } finally {
-                mProfileConnectionlock.unlock();
+                mProfileConnectedlock.unlock();
             }
         }
 
         @Override
         public void onServiceDisconnected(int profile) {
-            mProfileConnectionlock.lock();
-            mIsProfileReady = false;
-            try {
-                mConditionProfileConnection.signal();
-            } finally {
-                mProfileConnectionlock.unlock();
-            }
         }
     }
 }

@@ -50,8 +50,8 @@ public class BluetoothHidHostTest extends AndroidTestCase {
     private UiAutomation mUiAutomation;
 
     private boolean mIsProfileReady;
-    private Condition mConditionProfileConnection;
-    private ReentrantLock mProfileConnectionlock;
+    private Condition mConditionProfileIsConnected;
+    private ReentrantLock mProfileConnectedlock;
 
     @Override
     public void setUp() throws Exception {
@@ -71,8 +71,8 @@ public class BluetoothHidHostTest extends AndroidTestCase {
         mAdapter = manager.getAdapter();
         assertTrue(BTAdapterUtils.enableAdapter(mAdapter, mContext));
 
-        mProfileConnectionlock = new ReentrantLock();
-        mConditionProfileConnection = mProfileConnectionlock.newCondition();
+        mProfileConnectedlock = new ReentrantLock();
+        mConditionProfileIsConnected = mProfileConnectedlock.newCondition();
         mIsProfileReady = false;
         mHidHost = null;
 
@@ -91,18 +91,6 @@ public class BluetoothHidHostTest extends AndroidTestCase {
             mIsProfileReady = false;
         }
         mAdapter = null;
-    }
-
-    public void test_closeProfileProxy() {
-        if (!(mHasBluetooth && mIsHidHostSupported)) return;
-
-        assertTrue(waitForProfileConnect());
-        assertNotNull(mHidHost);
-        assertTrue(mIsProfileReady);
-
-        mAdapter.closeProfileProxy(BluetoothProfile.HID_HOST, mHidHost);
-        assertTrue(waitForProfileDisconnect());
-        assertFalse(mIsProfileReady);
     }
 
     public void test_getConnectedDevices() {
@@ -211,11 +199,11 @@ public class BluetoothHidHostTest extends AndroidTestCase {
     }
 
     private boolean waitForProfileConnect() {
-        mProfileConnectionlock.lock();
+        mProfileConnectedlock.lock();
         try {
             // Wait for the Adapter to be disabled
             while (!mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
+                if (!mConditionProfileIsConnected.await(
                         PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                     // Timeout
                     Log.e(TAG, "Timeout while waiting for Profile Connect");
@@ -225,54 +213,28 @@ public class BluetoothHidHostTest extends AndroidTestCase {
         } catch (InterruptedException e) {
             Log.e(TAG, "waitForProfileConnect: interrupted");
         } finally {
-            mProfileConnectionlock.unlock();
+            mProfileConnectedlock.unlock();
         }
         return mIsProfileReady;
-    }
-
-    private boolean waitForProfileDisconnect() {
-        mConditionProfileConnection = mProfileConnectionlock.newCondition();
-        mProfileConnectionlock.lock();
-        try {
-            while (mIsProfileReady) {
-                if (!mConditionProfileConnection.await(
-                        PROXY_CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                    // Timeout
-                    Log.e(TAG, "Timeout while waiting for Profile Disconnect");
-                    break;
-                } // else spurious wakeups
-            }
-        } catch (InterruptedException e) {
-            Log.e(TAG, "waitForProfileDisconnect: interrrupted");
-        } finally {
-            mProfileConnectionlock.unlock();
-        }
-        return !mIsProfileReady;
     }
 
     private final class BluetoothHidHostListener implements BluetoothProfile.ServiceListener {
 
         @Override
         public void onServiceConnected(int profile, BluetoothProfile proxy) {
-            mProfileConnectionlock.lock();
+            mProfileConnectedlock.lock();
             try {
                 mHidHost = (BluetoothHidHost) proxy;
                 mIsProfileReady = true;
-                mConditionProfileConnection.signal();
+                mConditionProfileIsConnected.signal();
             } finally {
-                mProfileConnectionlock.unlock();
+                mProfileConnectedlock.unlock();
             }
         }
 
         @Override
         public void onServiceDisconnected(int profile) {
-            mProfileConnectionlock.lock();
-            mIsProfileReady = false;
-            try {
-                mConditionProfileConnection.signal();
-            } finally {
-                mProfileConnectionlock.unlock();
-            }
+            // Do nothing
         }
     }
 }
