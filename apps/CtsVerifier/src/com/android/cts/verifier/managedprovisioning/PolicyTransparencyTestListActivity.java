@@ -170,7 +170,7 @@ public class PolicyTransparencyTestListActivity extends PassFailButtons.TestList
             intent.putExtra(PolicyTransparencyTestActivity.EXTRA_TEST_ID, testId);
             // This restriction is set per user so current user's DPM should be used instead of
             // device owner's DPM.
-            if (mMode == MODE_DEVICE_OWNER && ALSO_VALID_FOR_MANAGED_USER.contains(test)) {
+            if (mMode == MODE_DEVICE_OWNER || ALSO_VALID_FOR_MANAGED_USER.contains(test)) {
                 intent.putExtra(CommandReceiverActivity.EXTRA_USE_CURRENT_USER_DPM, true);
             }
             adapter.add(TestListItem.newTest(title, testId, intent, null));

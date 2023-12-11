@@ -448,9 +448,11 @@ public class DeviceOwnerPositiveTestActivity extends PassFailButtons.TestListAct
                     }));
         }
 
+        // Without PIN/Password watches don't have any lockscreen, so this policy isn't applicable
         // setKeyguardDisabled
-        if (FeatureUtil.isKeyguardShownWhenUserDoesntHaveCredentials(this)
-                && Utils.isLockscreenSupported(this)) {
+        if (FeatureUtil.isKeyguardShownWhenUserDoesntHaveCredentials(this) &&
+                Utils.isLockscreenSupported(this) &&
+                !packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH)) {
             adapter.add(createInteractiveTestItem(this, DISABLE_KEYGUARD_TEST_ID,
                     R.string.device_owner_disable_keyguard_test,
                     R.string.device_owner_disable_keyguard_test_info,
@@ -679,11 +681,14 @@ public class DeviceOwnerPositiveTestActivity extends PassFailButtons.TestListAct
         // removeDeviceOwner
         adapter.add(createInteractiveTestItem(this, REMOVE_DEVICE_OWNER_TEST_ID,
                 R.string.device_owner_remove_device_owner_test,
-                Utils.isTV(this) ? R.string.device_owner_remove_device_owner_test_info_on_tv
-                        : R.string.device_owner_remove_device_owner_test_info,
-                new ButtonInfo(
-                        R.string.remove_device_owner_button,
-                        createTearDownIntent())));
+                R.string.device_owner_remove_device_owner_test_info,
+                new ButtonInfo[]{
+                        new ButtonInfo(
+                                R.string.device_owner_settings_go,
+                                new Intent(Settings.ACTION_SECURITY_SETTINGS)),
+                        new ButtonInfo(
+                                R.string.remove_device_owner_button,
+                                createTearDownIntent())}));
     }
 
     static TestListItem createTestItem(Activity activity, String id, int titleRes,

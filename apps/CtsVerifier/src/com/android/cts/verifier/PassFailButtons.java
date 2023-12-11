@@ -32,7 +32,6 @@ import android.database.Cursor;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -143,12 +142,17 @@ public class PassFailButtons {
 
     public static class Activity extends android.app.Activity implements PassFailActivity {
         private WakeLock mWakeLock;
-        private final CtsVerifierReportLog mReportLog;
+        private CtsVerifierReportLog mReportLog;
         private final TestResultHistoryCollection mHistoryCollection;
 
+        protected boolean mRequireReportLogToPass;
+
         public Activity() {
-            this.mReportLog = new CtsVerifierReportLog(getReportFileName(), getReportSectionName());
             this.mHistoryCollection = new TestResultHistoryCollection();
+            if (requiresReportLog()) {
+                // if the subclass reports a report filename, they need a ReportLog object
+                newReportLog();
+            }
         }
 
         @Override
@@ -158,6 +162,10 @@ public class PassFailButtons {
                 mWakeLock = ((PowerManager) getSystemService(Context.POWER_SERVICE))
                         .newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "PassFailButtons");
                 mWakeLock.acquire();
+            }
+
+            if (mReportLog != null && !mReportLog.isOpen()) {
+                showReportLogWarningDialog(this);
             }
         }
 
@@ -206,9 +214,30 @@ public class PassFailButtons {
                     getHistoryCollection());
         }
 
+        protected CtsVerifierReportLog newReportLog() {
+            return mReportLog = new CtsVerifierReportLog(
+                    getReportFileName(), getReportSectionName());
+        }
+
+        /**
+         * Specifies if the test module will write a ReportLog entry
+         * @return true if the test module will write a ReportLog entry
+         */
+        public boolean requiresReportLog() {
+            return false;
+        }
+
         @Override
         public CtsVerifierReportLog getReportLog() {
             return mReportLog;
+        }
+
+        /**
+         * A mechanism to block tests from passing if no ReportLog data has been collected.
+         * @return true if the ReportLog is open OR if the test does not require that.
+         */
+        public boolean isReportLogOkToPass() {
+            return !mRequireReportLogToPass || (mReportLog != null & mReportLog.isOpen());
         }
 
         /**
@@ -255,8 +284,8 @@ public class PassFailButtons {
         private final TestResultHistoryCollection mHistoryCollection;
 
         public ListActivity() {
-            this.mReportLog = new CtsVerifierReportLog(getReportFileName(), getReportSectionName());
-            this.mHistoryCollection = new TestResultHistoryCollection();
+            mHistoryCollection = new TestResultHistoryCollection();
+            mReportLog = null;
         }
 
         @Override
@@ -526,6 +555,12 @@ public class PassFailButtons {
         args.putInt(INFO_DIALOG_VIEW_ID, viewId);
         activity.showDialog(INFO_DIALOG_ID, args);
     }
+
+    protected static void showReportLogWarningDialog(final android.app.Activity activity) {
+        showInfoDialog(activity,
+                R.string.reportlog_warning_title, R.string.reportlog_warning_body, -1);
+    }
+
 
     protected static Dialog createDialog(final android.app.Activity activity, int id, Bundle args) {
         switch (id) {

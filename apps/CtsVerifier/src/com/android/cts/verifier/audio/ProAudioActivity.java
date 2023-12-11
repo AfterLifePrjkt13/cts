@@ -79,7 +79,6 @@ public class ProAudioActivity
     private static final String KEY_CLAIMS_HDMI = "claims_hdmi";
 
     public ProAudioActivity() {
-        super();
     }
 
     // HDMI Stuff
@@ -158,11 +157,9 @@ public class ProAudioActivity
         boolean usbOK = mClaimsUSBHostMode && mClaimsUSBPeripheralMode;
         boolean hdmiOK = !mClaimsHDMI || isHDMIValid();
 
-        boolean hasPassed = !mClaimsProAudio ||
-                (mClaimsLowLatencyAudio &&
-                mClaimsMIDI &&
-                usbOK &&
-                hdmiOK);
+        boolean hasPassed = isReportLogOkToPass()
+                && !mClaimsProAudio
+                || (mClaimsLowLatencyAudio && mClaimsMIDI && usbOK && hdmiOK);
 
         getPassButton().setEnabled(hasPassed);
         return hasPassed;
@@ -172,7 +169,9 @@ public class ProAudioActivity
         boolean hasPassed = calculatePass();
 
         Resources strings = getResources();
-        if (hasPassed) {
+        if (!isReportLogOkToPass()) {
+            mTestStatusLbl.setText(getResources().getString(R.string.audio_general_reportlogtest));
+        } else  if (hasPassed) {
             mTestStatusLbl.setText(strings.getString(R.string.audio_proaudio_pass));
         } else if (!mClaimsMIDI) {
             mTestStatusLbl.setText(strings.getString(R.string.audio_proaudio_midinotreported));
@@ -246,6 +245,11 @@ public class ProAudioActivity
     //
     // PassFailButtons Overrides
     //
+    @Override
+    public boolean requiresReportLog() {
+        return true;
+    }
+
     @Override
     public String getReportFileName() { return PassFailButtons.AUDIO_TESTS_REPORT_LOG_NAME; }
 

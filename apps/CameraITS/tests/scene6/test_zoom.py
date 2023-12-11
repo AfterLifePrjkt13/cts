@@ -38,7 +38,7 @@ MIN_CIRCLE_PTS = 25
 MIN_FOCUS_DIST_TOL = 0.80  # allow charts a little closer than min
 NAME = os.path.splitext(os.path.basename(__file__))[0]
 NUM_STEPS = 10
-OFFSET_LOW_VAL = 10  # number of pixels
+OFFSET_ATOL = 10  # number of pixels
 OFFSET_RTOL = 0.15
 OFFSET_RTOL_LOW_OFFSET = 0.20
 OFFSET_RTOL_MIN_FD = 0.30
@@ -78,10 +78,6 @@ def get_test_tols_and_cap_size(cam, props, chart_distance, debug):
   test_tols = {}
   test_yuv_sizes = []
   for i in physical_ids:
-    min_fd = physical_props[i]['android.lens.info.minimumFocusDistance']
-    focal_l = physical_props[i]['android.lens.info.availableFocalLengths'][0]
-    logging.debug('cam[%s] min_fd: %.3f (diopters), fl: %.2f',
-                  i, min_fd, focal_l)
     yuv_sizes = capture_request_utils.get_available_output_sizes(
         'yuv', physical_props[i])
     test_yuv_sizes.append(yuv_sizes)
@@ -89,13 +85,16 @@ def get_test_tols_and_cap_size(cam, props, chart_distance, debug):
       logging.debug('cam[%s] yuv sizes: %s', i, str(yuv_sizes))
 
     # determine if minimum focus distance is less than rig depth
-    if (math.isclose(min_fd, 0.0, rel_tol=1E-6) or  # fixed focus
-        1.0/min_fd < chart_distance_m*MIN_FOCUS_DIST_TOL):
-      test_tols[focal_l] = (RADIUS_RTOL, OFFSET_RTOL)
-    else:
-      test_tols[focal_l] = (RADIUS_RTOL_MIN_FD, OFFSET_RTOL_MIN_FD)
-      logging.debug('loosening RTOL for cam[%s]: '
-                    'min focus distance too large.', i)
+    min_fd = physical_props[i]['android.lens.info.minimumFocusDistance']
+    for fl in physical_props[i]['android.lens.info.availableFocalLengths']:
+      logging.debug('cam[%s] min_fd: %.3f (diopters), fl: %.2f', i, min_fd, fl)
+      if (math.isclose(min_fd, 0.0, rel_tol=1E-6) or  # fixed focus
+          (1.0/min_fd < chart_distance_m*MIN_FOCUS_DIST_TOL)):
+        test_tols[fl] = (RADIUS_RTOL, OFFSET_RTOL)
+      else:
+        test_tols[fl] = (RADIUS_RTOL_MIN_FD, OFFSET_RTOL_MIN_FD)
+        logging.debug('loosening RTOL for cam[%s]: '
+                      'min focus distance too large.', i)
   # find intersection of formats for max common format
   common_sizes = list(set.intersection(*[set(list) for list in test_yuv_sizes]))
   if debug:
@@ -208,6 +207,7 @@ class ZoomTest(its_base_test.ItsBaseTest):
 
   def test_zoom(self):
     test_data = {}
+    test_failed = False
     with its_session_utils.ItsSession(
         device_id=self.dut.serial,
         camera_id=self.camera_id,
@@ -235,16 +235,25 @@ class ZoomTest(its_base_test.ItsBaseTest):
         test_tols, size = get_test_tols_and_cap_size(
             cam, props, self.chart_distance, debug)
       else:
-        fl = props['android.lens.info.availableFocalLengths'][0]
-        test_tols = {fl: (RADIUS_RTOL, OFFSET_RTOL)}
+        test_tols = {}
+        fls = props['android.lens.info.availableFocalLengths']
+        for fl in fls:
+          test_tols[fl] = (RADIUS_RTOL, OFFSET_RTOL)
         yuv_size = capture_request_utils.get_largest_yuv_format(props)
         size = [yuv_size['width'], yuv_size['height']]
       logging.debug('capture size: %s', str(size))
       logging.debug('test TOLs: %s', str(test_tols))
 
       # do captures over zoom range and find circles with cv2
-      cam.do_3a()
-      req = capture_request_utils.auto_capture_request()
+      if camera_properties_utils.manual_sensor(props):
+        logging.debug('Manual sensor, using manual capture request')
+        s, e, _, _, f_d = cam.do_3a(get_results=True)
+        req = capture_request_utils.manual_capture_request(
+            s, e, f_distance=f_d)
+      else:
+        logging.debug('Using auto capture request')
+        cam.do_3a()
+        req = capture_request_utils.auto_capture_request()
       for i, z in enumerate(z_list):
         logging.debug('zoom ratio: %.2f', z)
         req['android.control.zoomRatio'] = z
@@ -302,10 +311,10 @@ class ZoomTest(its_base_test.ItsBaseTest):
 
     for i, data in test_data.items():
       logging.debug('Zoom: %.2f, fl: %.2f', data['z'], data['fl'])
-      offset_abs = [(data['circle'][0] - size[0] // 2),
-                    (data['circle'][1] - size[1] // 2)]
+      offset_xy = [(data['circle'][0] - size[0] // 2),
+                   (data['circle'][1] - size[1] // 2)]
       logging.debug('Circle r: %.1f, center offset x, y: %d, %d',
-                    data['circle'][2], offset_abs[0], offset_abs[1])
+                    data['circle'][2], offset_xy[0], offset_xy[1])
       z_ratio = data['z'] / z_0
 
       # check relative size against zoom[0]
@@ -318,20 +327,24 @@ class ZoomTest(its_base_test.ItsBaseTest):
       # check relative offset against init vals w/ no focal length change
       if i == 0 or test_data[i-1]['fl'] != data['fl']:  # set init values
         z_init = float(data['z'])
-        offset_init = [(data['circle'][0] - size[0] // 2),
-                       (data['circle'][1] - size[1] // 2)]
+        offset_hypot_init = math.hypot(offset_xy[0], offset_xy[1])
+        logging.debug('offset_hypot_init: %.3f', offset_hypot_init)
       else:  # check
         z_ratio = data['z'] / z_init
-        offset_rel = (distance(offset_abs[0], offset_abs[1]) / z_ratio /
-                      distance(offset_init[0], offset_init[1]))
-        logging.debug('offset_rel: %.3f', offset_rel)
+        offset_hypot_rel = math.hypot(offset_xy[0], offset_xy[1]) / z_ratio
+        logging.debug('offset_hypot_rel: %.3f', offset_hypot_rel)
         rel_tol = data['o_tol']
-        if (np.linalg.norm(offset_init) < OFFSET_LOW_VAL and
-            rel_tol == OFFSET_RTOL):
-          rel_tol = OFFSET_RTOL_LOW_OFFSET
-        if not math.isclose(offset_rel, 1.0, rel_tol=rel_tol):
-          raise AssertionError(f"zoom: {data['z']:.2f}, offset(rel to 1): "
-                               f'{offset_rel:.4f}, RTOL: {rel_tol}')
+        if not math.isclose(offset_hypot_init, offset_hypot_rel,
+                            rel_tol=rel_tol, abs_tol=OFFSET_ATOL):
+          test_failed = True
+          e_msg = (f"zoom: {data['z']:.2f}, "
+                   f'offset init: {offset_hypot_init:.4f}, '
+                   f'offset rel: {offset_hypot_rel:.4f}, '
+                   f'RTOL: {rel_tol}, ATOL: {OFFSET_ATOL}')
+          logging.error(e_msg)
+
+    if test_failed:
+      raise AssertionError(f'{NAME} failed! Check test_log.DEBUG for errors')
 
 if __name__ == '__main__':
   test_runner.main()

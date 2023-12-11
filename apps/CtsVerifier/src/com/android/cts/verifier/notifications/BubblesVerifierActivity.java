@@ -20,6 +20,8 @@ import static android.app.NotificationManager.BUBBLE_PREFERENCE_NONE;
 import static android.app.NotificationManager.BUBBLE_PREFERENCE_SELECTED;
 import static android.app.NotificationManager.IMPORTANCE_DEFAULT;
 import static android.content.Intent.ACTION_VIEW;
+import static android.content.pm.PackageManager.FEATURE_INPUT_METHODS;
+import static android.content.pm.PackageManager.FEATURE_PC;
 import static android.view.View.GONE;
 import static android.view.View.INVISIBLE;
 import static android.view.View.VISIBLE;
@@ -91,6 +93,7 @@ public class BubblesVerifierActivity extends PassFailButtons.Activity {
     private int mCurrentTestIndex = -1; // gets incremented first time
     private int mStepFailureCount = 0;
     private boolean mShowingSummary = false;
+    private boolean mSupportsBubble = false;
 
     private Handler mHandler = new Handler();
     private Runnable mRunnable;
@@ -148,11 +151,18 @@ public class BubblesVerifierActivity extends PassFailButtons.Activity {
         });
 
         ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+
+        try {
+            mSupportsBubble = getResources().getBoolean(getResources().getIdentifier(
+                    "config_supportsBubble", "bool", "android"));
+        } catch (Resources.NotFoundException e) {
+            // Assume device does not support bubble, no need to do anything.
+        }
+
         if (am.isLowRamDevice()) {
             // Bubbles don't occur on low ram, instead they just show as notifs so test that
             mTests.add(new LowRamBubbleTest());
-        } else if (!Resources.getSystem()
-                    .getBoolean(com.android.internal.R.bool.config_supportsBubble)) {
+        } else if (!mSupportsBubble) {
             // Bubbles don't occur on bubble disabled devices, only test notifications.
             mTests.add(new BubbleDisabledTest());
         } else {
@@ -188,9 +198,14 @@ public class BubblesVerifierActivity extends PassFailButtons.Activity {
             //
             // Expanded view appearance
             //
-            mTests.add(new PortraitAndLandscape());
+            // At the moment, PC devices do not support rotation
+            if (!getPackageManager().hasSystemFeature(FEATURE_PC)) {
+                mTests.add(new PortraitAndLandscape());
+            }
             mTests.add(new ScrimBehindExpandedView());
-            mTests.add(new ImeInsetsExpandedView());
+            if (getPackageManager().hasSystemFeature(FEATURE_INPUT_METHODS)) {
+                mTests.add(new ImeInsetsExpandedView());
+            }
             mTests.add(new MinHeightExpandedView());
             mTests.add(new MaxHeightExpandedView());
         }

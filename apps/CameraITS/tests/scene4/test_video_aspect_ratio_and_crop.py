@@ -14,23 +14,27 @@
 """Validate video aspect ratio, crop and FoV vs format."""
 
 import logging
+import math
 import os.path
+
 from mobly import test_runner
 
 import its_base_test
 import camera_properties_utils
-import its_session_utils
-import video_processing_utils
 import capture_request_utils
-import image_processing_utils
-import opencv_processing_utils
 import image_fov_utils
+import image_processing_utils
+import its_session_utils
+import opencv_processing_utils
+import video_processing_utils
+
 
 _NAME = os.path.splitext(os.path.basename(__file__))[0]
 _VIDEO_RECORDING_DURATION_SECONDS = 3
 _FOV_PERCENT_RTOL = 0.15  # Relative tolerance on circle FoV % to expected.
 _AR_CHECKED_PRE_API_30 = ('4:3', '16:9', '18:9')
 _AR_DIFF_ATOL = 0.01
+_AR_FOR_JPEG_REFERENCE = (4/3, 16/9)
 _MAX_8BIT_IMGS = 255
 _MAX_10BIT_IMGS = 1023
 
@@ -76,8 +80,8 @@ class VideoAspectRatioAndCropTest(its_base_test.ItsBaseTest):
   When RAW capture is available, set the height vs. width ratio of the circle in
   the full-frame RAW as ground truth. In an ideal setup such ratio should be
   very close to 1.0, but here we just use the value derived from full resolution
-  RAW as ground truth to account for the possibility that the chart is not well
-  positioned to be precisely parallel to image sensor plane.
+  RAW as ground truth to account for the possibility that the chart is not
+  well positioned to be precisely parallel to image sensor plane.
   The test then compares the ground truth ratio with the same ratio measured
   on videos captued using different formats.
 
@@ -143,7 +147,7 @@ class VideoAspectRatioAndCropTest(its_base_test.ItsBaseTest):
 
       # Load scene.
       its_session_utils.load_scene(cam, props, self.scene,
-                                   self.tablet, chart_distance=0)
+                                   self.tablet, self.chart_distance)
 
       # Determine camera capabilities.
       supported_video_qualities = cam.get_supported_video_qualities(
@@ -151,20 +155,40 @@ class VideoAspectRatioAndCropTest(its_base_test.ItsBaseTest):
       logging.debug('Supported video qualities: %s', supported_video_qualities)
       full_or_better = camera_properties_utils.full_or_better(props)
       raw_avlb = camera_properties_utils.raw16(props)
+      debug = self.debug_mode
 
+      # Converge 3A.
+      cam.do_3a()
       req = capture_request_utils.auto_capture_request()
       ref_img_name_stem = f'{os.path.join(self.log_path, _NAME)}'
 
-      if raw_avlb and (fls_physical == fls_logical):
-        logging.debug('RAW')
-        raw_bool = True
+      # For main camera: if RAW available, use it as ground truth, else JPEG
+      # For physical sub-camera: if RAW available, only use if not 4:3 or 16:9
+      if raw_avlb:
+        pixel_array_w = props['android.sensor.info.pixelArraySize']['width']
+        pixel_array_h = props['android.sensor.info.pixelArraySize']['height']
+        logging.debug('Pixel array size: %dx%d', pixel_array_w, pixel_array_h)
+        raw_aspect_ratio = pixel_array_w / pixel_array_h
+        if (fls_physical == fls_logical or not
+            any(math.isclose(raw_aspect_ratio, jpeg_ar, abs_tol=_AR_DIFF_ATOL)
+                for jpeg_ar in _AR_FOR_JPEG_REFERENCE)):
+          logging.debug('RAW')
+          use_raw_fov = True
+        else:
+          logging.debug('RAW available, but using JPEG as ground truth')
+          use_raw_fov = False
       else:
         logging.debug('JPEG')
-        raw_bool = False
+        use_raw_fov = False
+
       ref_fov, cc_ct_gt, aspect_ratio_gt = image_fov_utils.find_fov_reference(
-          cam, req, props, raw_bool, ref_img_name_stem)
+          cam, req, props, use_raw_fov, ref_img_name_stem)
 
       run_crop_test = full_or_better and raw_avlb
+
+      # Get ffmpeg version being used.
+      ffmpeg_version = video_processing_utils.get_ffmpeg_version()
+      logging.debug('ffmpeg_version: %s', ffmpeg_version)
 
       for quality_profile_id_pair in supported_video_qualities:
         quality = quality_profile_id_pair.split(':')[0]
@@ -217,9 +241,15 @@ class VideoAspectRatioAndCropTest(its_base_test.ItsBaseTest):
             logging.debug('numpy image shape: %s', np_image.shape)
 
             # Check fov
+            ref_img_name = '%s_%s_w%d_h%d_circle.png' % (
+                os.path.join(self.log_path, _NAME), quality, width, height)
             circle = opencv_processing_utils.find_circle(
-                np_image, ref_img_name_stem, image_fov_utils.CIRCLE_MIN_AREA,
+                np_image, ref_img_name, image_fov_utils.CIRCLE_MIN_AREA,
                 image_fov_utils.CIRCLE_COLOR)
+
+            if debug:
+              opencv_processing_utils.append_circle_center_to_img(
+                  circle, np_image, ref_img_name)
 
             max_img_value = _MAX_8BIT_IMGS
             if hlg10_param:
@@ -260,8 +290,6 @@ class VideoAspectRatioAndCropTest(its_base_test.ItsBaseTest):
               if crop_chk_msg:
                 crop_img_name = '%s_%s_w%d_h%d_crop.png' % (
                     os.path.join(self.log_path, _NAME), quality, width, height)
-                opencv_processing_utils.append_circle_center_to_img(
-                    circle, np_image*max_img_value, crop_img_name)
                 failed_crop.append(crop_chk_msg)
                 image_processing_utils.write_image(np_image/max_img_value,
                                                    crop_img_name, True)

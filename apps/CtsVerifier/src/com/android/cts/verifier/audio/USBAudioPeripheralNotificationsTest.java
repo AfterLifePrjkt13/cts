@@ -20,23 +20,17 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
-
 import android.os.Bundle;
 import android.os.Handler;
-
 import android.util.Log;
-
 import android.widget.TextView;
 
 import com.android.compatibility.common.util.CddTest;
-import com.android.compatibility.common.util.ReportLog;
 import com.android.compatibility.common.util.ResultType;
 import com.android.compatibility.common.util.ResultUnit;
-
 import com.android.cts.verifier.PassFailButtons;
 import com.android.cts.verifier.R;  // needed to access resource in CTSVerifier project namespace.
 
@@ -131,6 +125,16 @@ public class USBAudioPeripheralNotificationsTest extends PassFailButtons.Activit
         }
     }
 
+    @Override
+    public boolean requiresReportLog() {
+        return true;
+    }
+
+    @Override
+    public String getReportFileName() {
+        return PassFailButtons.AUDIO_TESTS_REPORT_LOG_NAME;
+    }
+
     private void reportPlugIntent(Intent intent) {
         // [ 7.8 .2.2/H-2-1] MUST broadcast Intent ACTION_HEADSET_PLUG with "microphone" extra
         // set to 0 when the USB audio terminal types 0x0302 is detected.
@@ -173,9 +177,10 @@ public class USBAudioPeripheralNotificationsTest extends PassFailButtons.Activit
     // Test Status
     //
     private boolean calculatePass() {
-        return mUsbHeadsetInReceived && mUsbHeadsetOutReceived &&
-                mUsbDeviceInReceived && mUsbDeviceOutReceived &&
-                mPlugIntentReceived;
+        return isReportLogOkToPass()
+                && mUsbHeadsetInReceived && mUsbHeadsetOutReceived
+                && mUsbDeviceInReceived && mUsbDeviceOutReceived
+                && mPlugIntentReceived;
     }
 
     //

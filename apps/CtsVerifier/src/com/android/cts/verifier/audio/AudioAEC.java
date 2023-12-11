@@ -259,11 +259,15 @@ public class AudioAEC extends AudioFrequencyActivity implements View.OnClickList
                 setLevelForStream(playbackStreamType, desiredLevel);
 
                 int currentLevel = getLevelForStream(playbackStreamType);
-                if (currentLevel != desiredLevel) {
+                if (am.isVolumeFixed()) {
+                    sendMessage(AudioTestRunner.TEST_MESSAGE,
+                        "configured for Fixed volume, bypassing volume level check");
+
+                } else if (currentLevel != desiredLevel) {
                     am.setMode(originalMode);
                     sendMessage(AudioTestRunner.TEST_ENDED_ERROR,
-                            "Couldn't set level for STREAM_VOICE_CALL. Expected " +
-                                    desiredLevel +" got: " + currentLevel);
+                        "Couldn't set level for STREAM_VOICE_CALL. Expected " +
+                        desiredLevel +" got: " + currentLevel);
                     return;
                 }
 
@@ -496,8 +500,10 @@ public class AudioAEC extends AudioFrequencyActivity implements View.OnClickList
             Log.v(TAG, "Test EndedOk. " + testId + " str:"+str);
             showProgressIndicator(false);
             mResultTest.setText("test completed. " + str);
-            if (mTestAECPassed) {
-                getPassButton().setEnabled(true);;
+            if (!isReportLogOkToPass()) {
+                mResultTest.setText(getResources().getString(R.string.audio_general_reportlogtest));
+            } else if (mTestAECPassed) {
+                getPassButton().setEnabled(true);
             }
         }
 

@@ -19,6 +19,7 @@
 import logging
 import os.path
 import subprocess
+import error_util
 
 
 ITS_SUPPORTED_QUALITIES = (
@@ -33,7 +34,27 @@ ITS_SUPPORTED_QUALITIES = (
     'LOW',
     'VGA'
 )
-QCIF_SIZE = '176x144'
+
+LOW_RESOLUTION_SIZES = (
+    '176x144',
+    '192x144',
+    '352x288',
+    '384x288',
+    '320x240',
+)
+
+LOWEST_RES_TESTED_AREA = 640*360
+
+def get_ffmpeg_version():
+  """Returns the ffmpeg version being used."""
+
+  ffmpeg_version_cmd = ('ffmpeg -version')
+  p = subprocess.Popen(ffmpeg_version_cmd, shell=True, stdout=subprocess.PIPE)
+  output, _ = p.communicate()
+  if p.poll() != 0:
+    raise error_util.CameraItsError('Error running ffmpeg version cmd.')
+  decoded_output = output.decode('utf-8')
+  return decoded_output.split(' ')[2]
 
 
 def extract_key_frames_from_video(log_path, video_file_name):

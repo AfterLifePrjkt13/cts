@@ -107,16 +107,15 @@ def do_capture_and_determine_sharpness(
   caps = cam.do_capture([req]*NUM_SAMPLES, [out_surface], reprocess_format)
   for n in range(NUM_SAMPLES):
     y, _, _ = image_processing_utils.convert_capture_to_planes(caps[n])
-    chart.img = image_processing_utils.normalize_img(
-        image_processing_utils.get_image_patch(
-            y, chart.xnorm, chart.ynorm, chart.wnorm, chart.hnorm))
+    chart.img = image_processing_utils.get_image_patch(
+        y, chart.xnorm, chart.ynorm, chart.wnorm, chart.hnorm)
     if n == 0:
       image_processing_utils.write_image(
           chart.img, '%s_reprocess_fmt_%s_edge=%d.jpg' % (
               os.path.join(log_path, NAME), reprocess_format, edge_mode))
       edge_mode_res = caps[n]['metadata']['android.edge.mode']
     sharpness_list.append(
-        image_processing_utils.compute_image_sharpness(chart.img))
+        image_processing_utils.compute_image_sharpness(chart.img)*255)
   logging.debug('Sharpness list for edge mode %d: %s',
                 edge_mode, str(sharpness_list))
   return {'edge_mode': edge_mode_res, 'sharpness': np.mean(sharpness_list)}
@@ -134,7 +133,6 @@ class ReprocessEdgeEnhancementTest(its_base_test.ItsBaseTest):
   """
 
   def test_reprocess_edge_enhancement(self):
-    logging.debug('Starting %s', NAME)
     logging.debug('Edge modes: %s', str(EDGE_MODES))
     with its_session_utils.ItsSession(
         device_id=self.dut.serial,
@@ -179,9 +177,10 @@ class ReprocessEdgeEnhancementTest(its_base_test.ItsBaseTest):
 
       # Initialize plot
       pylab.figure('reprocess_result')
-      pylab.title(NAME)
-      pylab.xlabel('Edge Enhance Mode')
-      pylab.ylabel('Sharpness')
+      pylab.suptitle(NAME)
+      pylab.title(str(EDGE_MODES))
+      pylab.xlabel('Edge Enhancement Mode')
+      pylab.ylabel('Image Sharpness')
       pylab.xticks(EDGE_MODES_VALUES)
 
       # Get the sharpness for each edge mode for regular requests
@@ -244,6 +243,7 @@ class ReprocessEdgeEnhancementTest(its_base_test.ItsBaseTest):
         logging.debug('Check reprocess format: %s', reprocess_format)
         check_edge_modes(sharpnesses_reprocess[reprocess_format])
 
+        # Check reprocessing doesn't make everyting worse
         hq_div_off_reprocess = (
             sharpnesses_reprocess[reprocess_format][EDGE_MODES['HQ']] /
             sharpnesses_reprocess[reprocess_format][EDGE_MODES['OFF']])
@@ -251,11 +251,10 @@ class ReprocessEdgeEnhancementTest(its_base_test.ItsBaseTest):
             sharpness_regular[EDGE_MODES['HQ']] /
             sharpness_regular[EDGE_MODES['OFF']])
         logging.debug('Verify reprocess HQ ~= reg HQ relative to OFF')
-        if not math.isclose(hq_div_off_reprocess, hq_div_off_regular,
-                            rel_tol=SHARPNESS_RTOL):
-          raise AssertionError(f'HQ/OFF_reprocess: {hq_div_off_reprocess:.4f}, '
-                               f'HQ/OFF_reg: {hq_div_off_regular:.4f}, '
-                               f'RTOL: {SHARPNESS_RTOL}')
+        if hq_div_off_reprocess < hq_div_off_regular*(1-SHARPNESS_RTOL):
+          raise AssertionError(
+              f'HQ/OFF_{reprocess_format}: {hq_div_off_reprocess:.4f}, '
+              f'HQ/OFF_reg: {hq_div_off_regular:.4f}, RTOL: {SHARPNESS_RTOL}')
 
 
 if __name__ == '__main__':

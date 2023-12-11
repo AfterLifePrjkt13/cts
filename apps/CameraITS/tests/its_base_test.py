@@ -14,6 +14,7 @@
 
 
 import logging
+import os
 import time
 
 import its_session_utils
@@ -52,6 +53,8 @@ NOT_YET_MANDATED = {
     'sensor_fusion': [],
 }
 
+logging.getLogger('matplotlib.font_manager').disabled = True
+
 
 class ItsBaseTest(base_test.BaseTestClass):
   """Base test for CameraITS tests.
@@ -83,9 +86,10 @@ class ItsBaseTest(base_test.BaseTestClass):
     else:
       self.lighting_cntl = 'None'
       self.lighting_ch = '1'
+    if self.user_params.get('tablet_device'):
+      self.tablet_device = self.user_params['tablet_device'] == 'True'
     if self.user_params.get('debug_mode'):
-      self.debug_mode = True if self.user_params[
-          'debug_mode'] == 'True' else False
+      self.debug_mode = self.user_params['debug_mode'] == 'True'
     if self.user_params.get('scene'):
       self.scene = self.user_params['scene']
     camera_id_combo = self.parse_hidden_camera_id()
@@ -100,6 +104,13 @@ class ItsBaseTest(base_test.BaseTestClass):
       try:
         self.tablet = devices[1]
         self.tablet_screen_brightness = self.user_params['brightness']
+        tablet_name_unencoded = self.tablet.adb.shell(
+            ['getprop', 'ro.build.product']
+        )
+        tablet_name = str(tablet_name_unencoded.decode('utf-8')).strip()
+        logging.debug('tablet name: %s', tablet_name)
+        its_session_utils.validate_tablet_brightness(
+            tablet_name, self.tablet_screen_brightness)
       except KeyError:
         logging.debug('Not all tablet arguments set.')
     else:  # sensor_fusion or manual run
@@ -182,17 +193,17 @@ class ItsBaseTest(base_test.BaseTestClass):
     logging.debug('dumpsys window output: %s', output.decode('utf-8').strip())
     output_list = str(output.decode('utf-8')).strip().split(' ')
     for val in output_list:
-      if 'LandscapeRotation' in val:
-        landscape_val = str(val.split('=')[-1])
-        # For some tablets the values are in constant forms such as ROTATION_90
-        if 'ROTATION_90' in landscape_val:
-          landscape_val = '1'
-        elif 'ROTATION_0' in landscape_val:
-          landscape_val = '0'
-        logging.debug('Changing the orientation to landscape mode.')
-        self.tablet.adb.shell(['settings', 'put', 'system', 'user_rotation',
-                               landscape_val])
-        break
+        if 'LandscapeRotation' in val:
+            landscape_val = str(val.split('=')[-1])
+            # For some tablets the values are in constant forms such as ROTATION_90
+            if 'ROTATION_90' in landscape_val:
+                landscape_val = '1'
+            elif 'ROTATION_0' in landscape_val:
+                landscape_val = '0'
+            logging.debug('Changing the orientation to landscape mode.')
+            self.tablet.adb.shell(['settings', 'put', 'system', 'user_rotation',
+                                   landscape_val])
+            break
     logging.debug('Reported tablet orientation is: %d',
                   int(self.tablet.adb.shell(
                       'settings get system user_rotation')))
@@ -244,4 +255,15 @@ class ItsBaseTest(base_test.BaseTestClass):
         logging.debug('%s is not yet mandated.', self.current_test_info.name)
         asserts.fail('Not yet mandated test', extras='Not yet mandated test')
 
-
+  def teardown_class(self):
+    # edit root_output_path and summary_writer path
+    # to add test name to output directory
+    logging.debug('summary_writer._path: %s', self.summary_writer._path)
+    summary_head, summary_tail = os.path.split(self.summary_writer._path)
+    self.summary_writer._path = os.path.join(
+        f'{summary_head}_{self.__class__.__name__}', summary_tail)
+    os.rename(self.root_output_path,
+              f'{self.root_output_path}_{self.__class__.__name__}')
+    # print root_output_path so that it can be written to report log.
+    # Note: Do not replace print with logging.debug here.
+    print('root_output_path:', f'{self.root_output_path}_{self.__class__.__name__}')

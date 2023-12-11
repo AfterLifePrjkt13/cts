@@ -116,9 +116,9 @@ public class ByodFlowTestActivity extends DialogTestListActivity {
     private TestListItem mDisableLocationModeThroughMainSwitchTest;
     private TestListItem mDisableLocationModeThroughWorkSwitchTest;
     private TestListItem mPrimaryLocationWhenWorkDisabledTest;
-    private DialogTestListItem mSelectWorkChallenge;
-    private DialogTestListItem mConfirmWorkCredentials;
-    private DialogTestListItem mPatternWorkChallenge;
+//    private DialogTestListItem mSelectWorkChallenge;
+//    private DialogTestListItem mConfirmWorkCredentials;
+//    private DialogTestListItem mPatternWorkChallenge;
     private DialogTestListItem mParentProfilePassword;
     private DialogTestListItem mPersonalRingtonesTest;
     private TestListItem mVpnTest;
@@ -291,19 +291,20 @@ public class ByodFlowTestActivity extends DialogTestListActivity {
                     R.string.provisioning_byod_workapps_visible_instruction,
                     new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
                     R.drawable.badged_icon);
-
+            /* Disabling due to b/259890166
             mConfirmWorkCredentials = new DialogTestListItem(this,
                     R.string.provisioning_byod_confirm_work_credentials,
                     "BYOD_ConfirmWorkCredentials",
                     R.string.provisioning_byod_confirm_work_credentials_description,
                     new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME));
-
+            */
+            /* Disable due to  b/242477777
             mPatternWorkChallenge = new DialogTestListItem(this,
                     R.string.provisioning_byod_pattern_work_challenge,
                     "BYOD_PatternWorkChallenge",
                     R.string.provisioning_byod_pattern_work_challenge_description,
                     new Intent(ByodHelperActivity.ACTION_TEST_PATTERN_WORK_CHALLENGE));
-
+            */
             mWiFiDataUsageSettingsVisibleTest = new DialogTestListItem(this,
                     R.string.provisioning_byod_wifi_data_usage_settings,
                     "BYOD_WiFiDataUsageSettingsVisibleTest",
@@ -471,13 +472,13 @@ public class ByodFlowTestActivity extends DialogTestListActivity {
                 "BYOD_PermissionLockdownTest",
                 R.string.profile_owner_permission_lockdown_test_info,
                 permissionCheckIntent);
-
+        /* Disable due to b/241498104
         mSelectWorkChallenge = new DialogTestListItem(this,
                 R.string.provisioning_byod_select_work_challenge,
                 "BYOD_SelectWorkChallenge",
                 R.string.provisioning_byod_select_work_challenge_description,
                 new Intent(ByodHelperActivity.ACTION_TEST_SELECT_WORK_CHALLENGE));
-
+        */
         mRecentsTest = TestListItem.newTest(this,
                 R.string.provisioning_byod_recents,
                 RecentsRedactionActivity.class.getName(),
@@ -560,11 +561,11 @@ public class ByodFlowTestActivity extends DialogTestListActivity {
         adapter.add(mVpnTest);
         adapter.add(mAlwaysOnVpnSettingsTest);
         adapter.add(mTurnOffWorkFeaturesTest);
-        adapter.add(mSelectWorkChallenge);
-        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
-            adapter.add(mConfirmWorkCredentials);
-            adapter.add(mPatternWorkChallenge);
-        }
+//        adapter.add(mSelectWorkChallenge);
+//        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
+//            adapter.add(mConfirmWorkCredentials);
+//            adapter.add(mPatternWorkChallenge);
+//        }
         adapter.add(mRecentsTest);
         adapter.add(mOrganizationInfoTest);
         adapter.add(mParentProfilePassword);

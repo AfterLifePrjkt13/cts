@@ -32,6 +32,16 @@
     <string name="finish_button_text">Finish</string>
     <string name="fail_and_next_button_text">Fail and Next</string>
 
+    <!-- Strings for CtsReportLog warning -->
+    <string name="reportlog_warning_title">CTS-Verifier Report Log</string>
+    <string name="reportlog_warning_body">Can\'t create folder for CTS-Verifier Report Logs.
+        \n\nPlease enable Report Log creation by exiting CTS Verifier and running the following commands:
+        \n\n<code>adb shell appops set com.android.cts.verifier android:read_device_identifiers allow</code>
+        \n\n<code>adb shell appops set com.android.cts.verifier MANAGE_EXTERNAL_STORAGE 0</code>
+        \n\nTest instructions are found in the \"Using CTS Verifier\" document found at
+        <a href="https://source.android.com/compatibility/cts/verifier">https://source.android.com/compatibility/cts/verifier</a>
+    </string>
+
     <!-- Strings for TestListActivity -->
     <string name="test_category_audio">Audio</string>
     <string name="test_category_camera">Camera</string>
@@ -301,9 +311,12 @@
     </string>
     <string name="clipboard_preview_test_instructions">
         Press the \'Copy\' button to copy the secret code to the clipboard.
-        \n\nUse the clipboard preview UI, or the clipboard editor component to view the secret code.
-        \n\nEnter the secret code using the buttons below.
+        \n\nDo not press any other buttons or tap the clipboard UI after you press the \'Copy\' button.
+        \n\n If you see the word "FAIL" appear on screen, press Fail.
+        \n\n If you see a confirmation that content has been copied to the clipboard, press Pass.
+        \n\n If nothing happens, press Fail if this is a handheld device, otherwise press Pass.
     </string>
+    <string name="clipboard_preview_test_secret">FAIL</string>
     <string name="clipboard_preview_test_copy_button">Copy</string>
 
 
@@ -382,7 +395,7 @@
     <string name="read_logs_fg_allow_text">User Consent for Device Logs Allow in Foreground Test</string>
     <string name="read_logs_fg_deny_text">User Consent for Device Logs Deny in Foreground Test</string>
     <string name="read_logs_bg_text">User Consent for Device Logs in Instrumentation Test</string>
-    <string name="read_logs_test_info">"This test verifies that user consent for per-use prompt is working properly.\nThe test assumes READ_LOGS permission is granted to the app.\nStart this test by clicking User Consent for Device Logs Allow(Deny) in Foreground Test button.\nWhen the process is running in foreground, a user will see a prompt. Once a user clicks the prompt, users have an option to choose \"Allow one-time access\" or \"Don\'t Allow\". Please proceed with one option. "When the process is running in background, logd access will be denied.</string>
+    <string name="read_logs_test_info">This test verifies that user consent for per-use prompt is working properly.\nThe test assumes READ_LOGS permission is granted to the app.\nStart this test by clicking \"User Consent for Device Logs Allow in Foreground Test\" button.\nWhen the process is running in foreground, a user will see a prompt. Once a user clicks the prompt, users have an option to choose \"Allow one-time access\" or \"Don\'t Allow\". Choose \"Allow one-time access\" for the \"ALLOW\" test case and \"Don\'t Allow\" for the \"DENY\" test case.\nThe test results can be judged by the adb logcat prints from command \"adb logcat -b all -s ReadLogsTestActivity:*\"\n\"ReadLogsTestActivity: Logcat system allow log contains e.g.: true lineCount: 11 larger than: true\" shows the success of the \"ALLOW\" test case and\n\"ReadLogsTestActivity: Logcat system deny line count:0\" shows the success of the \"DENY\" test case.</string>
 
     <!-- Strings for lock bound keys test -->
     <string name="sec_lock_bound_key_test">Lock Bound Keys Test</string>
@@ -778,7 +791,7 @@
     <!-- BLE Advertising Set test strings -->
     <string name="ble_advertising_set_test_name">Bluetooth LE Advertising Set Test</string>
     <string name="ble_advertising_set_test_info">Bluetooth LE Advertising Set tests AdvertisingSet and AdvertisingSetCallback APIs.</string>
-    <string name="ble_advertising_set_test_instruction">Press the \"Set Up\" button first, then start the test by pressing the \"Start Test\" button. UI thread may freeze for a few seconds while enabling/disabling bluetooth adapter.</string>
+    <string name="ble_advertising_set_test_instruction">Press the \"Start Test\" button. UI thread may freeze for a few seconds while enabling/disabling bluetooth adapter.</string>
     <string name="ble_advertising_set_start_test">Start Test</string>
     <string name="ble_advertising_set_running_test">Running Test...</string>
     <string name="ble_advertising_set_finished_test">Finished Test</string>
@@ -2125,10 +2138,6 @@
         device was p2p device. Check the test case on the other device.</string>
     <string name="p2p_connection_error">
         Test failed.\n\nFailed to establish a p2p connection.</string>
-    <string name="p2p_connection_latency_error">
-        Test failed. \n\nConnection was expected to be established within %1$dms. But took=%2$dms.
-        \n\nPlease ensure that the Group Owner is ready on the other device before running
-        this test</string>
     <string name="p2p_detect_disconnection_error">
         Test failed.\n\nFailed to detect client disconnection.</string>
     <string name="p2p_disconnect_error">
@@ -2482,9 +2491,6 @@
     <string name="tiles_request_dismissed">After pressing \"Start request\", a dialog will appear
         requesting to add a quick settings tile. When it appears, dismiss it by tapping outside of
         it, or going back.</string>
-    <string name="tiles_request_answer_no">After pressing \"Start request\", a dialog will appear
-        requesting to add a quick settings tile. When it appears, tap the option in the dialog to
-        not add the tile.</string>
     <string name="tiles_request_correct_info">After pressing \"Start request\", a dialog will appear
         requesting to add a quick settings tile. When it appears, verify the following information
         in the dialog:\n
@@ -3374,7 +3380,7 @@ You should be prompted to select credentials; choose the ones you just installed
         Please press the Go button to open the Settings page.
         (If this device has a separate app for work settings, ignore the Go button and open that app manually from the launcher.)\n
         Navigate to Accounts and confirm that:\n
-        - There are two auto-sync options present, one for personal and one for work data (on the screen or in the overflow menu or in differernt tab).\n
+        - There are two auto-sync options present, one for personal and one for work data (on the screen or in the overflow menu or in different tab).\n
         - De-selecting either option prompts a warning dialog.\n
         \n
         Use the Back button (or navigate back to this app using Recents) to return to this page.
@@ -3741,14 +3747,8 @@ You should be prompted to select credentials; choose the ones you just installed
     </string>
     <string name="device_owner_remove_device_owner_test">Remove device owner</string>
     <string name="device_owner_remove_device_owner_test_info">
-            Please check in Settings &gt; Security &gt; Device Administrators if CTSVerifier is
-            Device Owner. Then press the button below, and check that CTSVerifier is NOT Device
-            Owner anymore.
-    </string>
-    <string name="device_owner_remove_device_owner_test_info_on_tv">
-            Please check in Settings &gt; Privacy &gt; Security &amp; Restrictions &gt; Device Administrators if CTSVerifier is
-            Device Owner. Then press the button below, and check that CTSVerifier is NOT Device
-            Owner anymore.
+            Please press the Go button to check whether CTSVerifier is Device Owner. Then press the Remove Device Owner button,
+            and check that CTSVerifier is NOT Device Owner anymore.
     </string>
     <string name="remove_device_owner_button">Remove device owner</string>
     <string name="device_owner_check_device_owner_test">Check device owner</string>
@@ -5414,6 +5414,16 @@ You should be prompted to select credentials; choose the ones you just installed
        input jack and BT01 input plug to the USB interface output jack.
        \nThe Virtual MIDI test does not require any MIDI interface hardware.
     </string>
+    <string name="analog_headset_test_info_tv">This test tests the following functionality with respect to wired analog headsets.\n
+        1. Correct audio playback.\n
+        2. Plug intents.\n
+        \nTo execute test:\n
+        1. Plug in an Android-compatible, analog headset. Verify connection/recognition.\n
+        2. Play test tone and verify correct behavior.\n
+        \nTo run this test it is necessary to have an Android device with a 3.5mm analog headset jack and a compatible analog headset.\n
+        \n(see <a href="https://source.android.com/devices/accessories/headset/plug-headset-spec">3.5 mm Headset: Accessory Specification</a> and
+        <a href="https://source.android.com/compatibility/android-cdd#7_8_2_1_analog_audio_ports">Android CDD § 7.8.2.1. Analog Audio Ports</a>)
+    </string>
 
     <string name="midiHasMIDILbl">Has MIDI Support</string>
 
@@ -5465,6 +5475,8 @@ You should be prompted to select credentials; choose the ones you just installed
     <string name="audio_general_pass">PASS</string>
     <string name="audio_general_fail">FAIL</string>
     <string name="audio_general_not_tested">Not Tested</string>
+    <string name="audio_general_not_required">Please Test If Supported</string>
+    <string name="audio_general_required">Required</string>
 
     <string name="audio_general_Input">Input</string>
     <string name="audio_general_Output">Output</string>
@@ -5480,6 +5492,7 @@ You should be prompted to select credentials; choose the ones you just installed
     <string name="audio_general_test_not_run">Test Not Run</string>
     <string name="audio_general_testnotcompleted">Test not completed.</string>
 
+    <string name="audio_general_reportlogtest">[Can\'t Write ReportLog]</string>
 
     <!-- Audio Loopback Latency Test -->
     <string name="audio_loopback_latency_test">Audio Loopback Latency Test</string>
@@ -5759,6 +5772,8 @@ Follow the instructions on the screen to measure the frequency response for the 
     <string name="audio_tap2tone_too_few">Not enough edges. Use fingernail.</string>
     <string name="audio_tap2tone_too_many">Too many edges. Use fingernail. Ensure there is
     no background noise.</string>
+    <string name="audio_tap2tone_bad_streams">Can\'t open streams.</string>
+    <string name="audio_tap2tone_noio">No mic and/or speaker. PASS</string>
 
     <!-- Strings for 6DoF test -->
     <string name="six_dof_test">6DoF Test</string>

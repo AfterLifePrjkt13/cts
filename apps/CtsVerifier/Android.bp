@@ -91,6 +91,7 @@ android_library {
         "CtsForceStopHelper-constants",
         "ctsmediautil",
         "DpmWrapper",
+        "MediaPerformanceClassCommon",
     ],
 
     libs: ["telephony-common"] + ["android.test.runner.stubs"] + ["android.test.base.stubs"] + ["android.test.mock.stubs"] + ["android.car-test-stubs"] + ["voip-common"] + ["truth-prebuilt"],

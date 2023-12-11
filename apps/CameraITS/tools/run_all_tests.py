@@ -55,6 +55,7 @@ TIME_KEY_START = 'start'
 TIME_KEY_END = 'end'
 VALID_CONTROLLERS = ('arduino', 'canakit')
 _INT_STR_DICT = {'11': '1_1', '12': '1_2'}  # recover replaced '_' in scene def
+_FRONT_CAMERA_ID = '1'
 
 # All possible scenes
 # Notes on scene names:
@@ -240,7 +241,7 @@ def check_manual_scenes(device_id, camera_id, scene, out_path):
       img_name = os.path.join(out_path, f'test_{scene}.jpg')
       logging.info('Please check scene setup in %s', img_name)
       image_processing_utils.write_image(img, img_name)
-      choice = input('Is the image okay for ITS {scene}? (Y/N)').lower()
+      choice = input(f'Is the image okay for ITS {scene}? (Y/N)').lower()
       if choice == 'y':
         break
 
@@ -337,6 +338,74 @@ def enable_external_storage(device_id):
   run(cmd)
 
 
+def get_available_cameras(device_id, camera_id):
+  """Get available camera devices in the current state.
+
+  Args:
+    device_id: Serial number of the device.
+    camera_id: Logical camera_id
+
+  Returns:
+    List of all the available camera_ids.
+  """
+  with its_session_utils.ItsSession(
+      device_id=device_id,
+      camera_id=camera_id) as cam:
+    props = cam.get_camera_properties()
+    props = cam.override_with_hidden_physical_camera_props(props)
+    unavailable_physical_cameras = cam.get_unavailable_physical_cameras(
+        camera_id)
+    unavailable_physical_ids = unavailable_physical_cameras[
+        'unavailablePhysicalCamerasArray']
+    output = cam.get_camera_ids()
+    all_camera_ids = output['cameraIdArray']
+    # Concat camera_id, physical camera_id and sub camera separator
+    unavailable_physical_ids = [f'{camera_id}.{s}'
+                                for s in unavailable_physical_ids]
+    for i in unavailable_physical_ids:
+      if i in all_camera_ids:
+        all_camera_ids.remove(i)
+    logging.debug('available camera ids: %s', all_camera_ids)
+  return all_camera_ids
+
+
+def get_unavailable_physical_cameras(device_id, camera_id):
+  """Get unavailable physical cameras in the current state.
+
+  Args:
+    device_id: Serial number of the device.
+    camera_id: Logical camera device id
+
+  Returns:
+    List of all the unavailable camera_ids.
+  """
+  with its_session_utils.ItsSession(
+      device_id=device_id,
+      camera_id=camera_id) as cam:
+    unavailable_physical_cameras = cam.get_unavailable_physical_cameras(
+        camera_id)
+    unavailable_physical_ids = unavailable_physical_cameras[
+        'unavailablePhysicalCamerasArray']
+    unavailable_physical_ids = [f'{camera_id}.{s}'
+                                for s in unavailable_physical_ids]
+    logging.debug('Unavailable physical camera ids: %s',
+                  unavailable_physical_ids)
+  return unavailable_physical_ids
+
+
+def is_device_folded(device_id):
+  """Returns True if the foldable device is in folded state.
+
+  Args:
+    device_id: Serial number of the foldable device.
+  """
+  cmd = (f'adb -s {device_id} shell cmd device_state state')
+  result = subprocess.getoutput(cmd)
+  if 'CLOSED' in result:
+    return True
+  return False
+
+
 def main():
   """Run all the Camera ITS automated tests.
 
@@ -390,9 +459,29 @@ def main():
   # Enable external storage on DUT to send summary report to CtsVerifier.apk
   enable_external_storage(device_id)
 
+  # Check whether the dut is foldable or not
+  testing_foldable_device = True if test_params_content[
+      'foldable_device'] == 'True' else False
+  available_camera_ids_to_test_foldable = []
+  if testing_foldable_device:
+    logging.debug('Testing foldable device.')
+    # Check the state of foldable device. True if device is folded,
+    # false if the device is opened.
+    device_folded = is_device_folded(device_id)
+    # list of available camera_ids to be tested in device state
+    available_camera_ids_to_test_foldable = get_available_cameras(
+        device_id, _FRONT_CAMERA_ID)
+
   config_file_test_key = config_file_contents['TestBeds'][0]['Name'].lower()
   if TEST_KEY_TABLET in config_file_test_key:
     tablet_id = get_device_serial_number('tablet', config_file_contents)
+    tablet_name_cmd = f'adb -s {tablet_id} shell getprop ro.build.product'
+    raw_output = subprocess.check_output(
+        tablet_name_cmd, stderr=subprocess.STDOUT, shell=True)
+    tablet_name = str(raw_output.decode('utf-8')).strip()
+    logging.debug('Tablet name: %s', tablet_name)
+    brightness = test_params_content['brightness']
+    its_session_utils.validate_tablet_brightness(tablet_name, brightness)
   else:
     tablet_id = None
 
@@ -417,6 +506,12 @@ def main():
   scenes = [_GROUPED_SCENES[s] if s in _GROUPED_SCENES else s for s in scenes]
   scenes = np.hstack(scenes).tolist()
   scenes = sorted(set(scenes), key=scenes.index)
+  # List of scenes to be executed in folded state will have '_folded'
+  # prefix. This will help distinguish the test results from folded vs
+  # open device state for front camera_ids.
+  folded_device_scenes = []
+  for scene in scenes:
+    folded_device_scenes.append(f'{scene}_folded')
 
   logging.info('Running ITS on device: %s, camera(s): %s, scene(s): %s',
                device_id, camera_id_combos, scenes)
@@ -428,9 +523,48 @@ def main():
     auto_scene_switch = False
     logging.info('No tablet: manual, sensor_fusion, or scene5 testing.')
 
+  folded_prompted = False
+  opened_prompted = False
   for camera_id in camera_id_combos:
     test_params_content['camera'] = camera_id
     results = {}
+    unav_cameras = []
+    # Get the list of unavailable cameras in current device state.
+    # These camera_ids should not be tested in current device state.
+    if testing_foldable_device:
+      unav_cameras = get_unavailable_physical_cameras(
+          device_id, _FRONT_CAMERA_ID)
+
+    if testing_foldable_device:
+      device_state = 'folded' if device_folded else 'opened'
+
+    testing_folded_front_camera = (testing_foldable_device and
+                                   device_folded and
+                                   _FRONT_CAMERA_ID in camera_id)
+
+    # Raise an assertion error if there is any camera unavailable in
+    # current device state. Usually scenes with suffix 'folded' will
+    # be executed in folded state.
+    if (testing_foldable_device and
+        _FRONT_CAMERA_ID in camera_id and camera_id in unav_cameras):
+      raise AssertionError(
+          f'Camera {camera_id} is unavailable in device state {device_state}'
+          f' and cannot be tested with device {device_state}!')
+
+    if (testing_folded_front_camera and camera_id not in unav_cameras
+        and not folded_prompted):
+      folded_prompted = True
+      input('\nYou are testing a foldable device in folded state.'
+            'Please make sure the device is folded and press <ENTER>'
+            'after positioning properly.\n')
+
+    if (testing_foldable_device and
+        not device_folded and _FRONT_CAMERA_ID in camera_id and
+        camera_id not in unav_cameras and not opened_prompted):
+      opened_prompted = True
+      input('\nYou are testing a foldable device in opened state.'
+            'Please make sure the device is unfolded and press <ENTER>'
+            'after positioning properly.\n')
 
     # Run through all scenes if user does not supply one and config file doesn't
     # have specific scene name listed.
@@ -452,9 +586,35 @@ def main():
       if not per_camera_scenes:
         raise ValueError('No valid scene specified for this camera.')
 
+    # Folded state scenes will have 'folded' suffix only for
+    # front cameras since rear cameras are common in both folded
+    # and unfolded state.
+    foldable_per_camera_scenes = []
+    if testing_folded_front_camera:
+      if camera_id not in available_camera_ids_to_test_foldable:
+        raise AssertionError(f'camera {camera_id} is not available.')
+      for s in per_camera_scenes:
+        foldable_per_camera_scenes.append(f'{s}_folded')
+
+    if foldable_per_camera_scenes:
+      per_camera_scenes = foldable_per_camera_scenes
+
     logging.info('camera: %s, scene(s): %s', camera_id, per_camera_scenes)
-    for s in _ALL_SCENES:
+
+    if testing_folded_front_camera:
+      all_scenes = [f'{s}_folded' for s in _ALL_SCENES]
+    else:
+      all_scenes = _ALL_SCENES
+
+    for s in all_scenes:
       results[s] = {RESULT_KEY: RESULT_NOT_EXECUTED}
+
+      # assert device folded testing scenes with suffix 'folded'
+      if testing_foldable_device and 'folded' in s:
+        if not device_folded:
+          raise AssertionError('Device should be folded during'
+                               ' testing scenes with suffix "folded"')
+
     # A subdir in topdir will be created for each camera_id. All scene test
     # output logs for each camera id will be stored in this subdir.
     # This output log path is a mobly param : LogPath
@@ -464,7 +624,6 @@ def main():
     os.mkdir(mobly_output_logs_path)
     tot_pass = 0
     for s in per_camera_scenes:
-      test_params_content['scene'] = s
       results[s]['TEST_STATUS'] = []
       results[s][METRICS_KEY] = []
 
@@ -473,14 +632,22 @@ def main():
       scene_test_summary = f'Cam{camera_id} {s}' + '\n'
       mobly_scene_output_logs_path = os.path.join(mobly_output_logs_path, s)
 
+      # Since test directories do not have 'folded' in the name, we need
+      # to remove that suffix for the path of the scenes to be loaded
+      # on the tablets
+      testing_scene = s
+      if 'folded' in s:
+        testing_scene = s.split('_folded')[0]
+      test_params_content['scene'] = testing_scene
       if auto_scene_switch:
         # Copy scene images onto the tablet
-        if s not in ['scene0']:
-          load_scenes_on_tablet(s, tablet_id)
+        if 'scene0' not in testing_scene:
+          load_scenes_on_tablet(testing_scene, tablet_id)
       else:
         # Check manual scenes for correctness
-        if s not in ['scene0'] and not testing_sensor_fusion_with_controller:
-          check_manual_scenes(device_id, camera_id, s, mobly_output_logs_path)
+        if 'scene0' not in testing_scene and not testing_sensor_fusion_with_controller:
+          check_manual_scenes(device_id, camera_id, testing_scene,
+                              mobly_output_logs_path)
 
       scene_test_list = []
       config_file_contents['TestBeds'][0]['TestParams'] = test_params_content
@@ -497,19 +664,21 @@ def main():
       logging.info('Using %s as temporary config yml file', new_yml_file_name)
       if camera_id.rfind(its_session_utils.SUB_CAMERA_SEPARATOR) == -1:
         scene_dir = os.listdir(
-            os.path.join(os.environ['CAMERA_ITS_TOP'], 'tests', s))
+            os.path.join(os.environ['CAMERA_ITS_TOP'], 'tests', testing_scene))
         for file_name in scene_dir:
           if file_name.endswith('.py') and 'test' in file_name:
             scene_test_list.append(file_name)
       else:  # sub-camera
-        if SUB_CAMERA_TESTS.get(s):
-          scene_test_list = [f'{test}.py' for test in SUB_CAMERA_TESTS[s]]
+        if SUB_CAMERA_TESTS.get(testing_scene):
+          scene_test_list = [f'{test}.py' for test in SUB_CAMERA_TESTS[
+              testing_scene]]
         else:
           scene_test_list = []
       scene_test_list.sort()
 
       # Run tests for scene
-      logging.info('Running tests for %s with camera %s', s, camera_id)
+      logging.info('Running tests for %s with camera %s',
+                   testing_scene, camera_id)
       num_pass = 0
       num_skip = 0
       num_not_mandated_fail = 0
@@ -518,14 +687,15 @@ def main():
         # Handle repeated test
         if 'tests/' in test:
           cmd = [
-              'python',
+              'python3',
               os.path.join(os.environ['CAMERA_ITS_TOP'], test), '-c',
               '%s' % new_yml_file_name
           ]
         else:
           cmd = [
-              'python',
-              os.path.join(os.environ['CAMERA_ITS_TOP'], 'tests', s, test),
+              'python3',
+              os.path.join(os.environ['CAMERA_ITS_TOP'], 'tests',
+                           testing_scene, test),
               '-c',
               '%s' % new_yml_file_name
           ]
@@ -589,7 +759,8 @@ def main():
             os.remove(MOBLY_TEST_SUMMARY_TXT_FILE)
         logging.info('%s %s/%s', return_string, s, test)
         test_name = test.split('/')[-1].split('.')[0]
-        results[s]['TEST_STATUS'].append({'test':test_name,'status':return_string.strip()})
+        results[s]['TEST_STATUS'].append({'test': test_name,
+                                          'status': return_string.strip()})
         if test_mpc_req:
           results[s][METRICS_KEY].append(test_mpc_req)
         msg_short = '%s %s' % (return_string, test)
